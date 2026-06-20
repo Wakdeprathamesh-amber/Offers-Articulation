@@ -149,12 +149,22 @@ STEP 3 — TERMS & CONDITIONS
 - For US properties: generic T&Cs are typically used; still capture any
   floorplan-specific term mentioned in the source.
 - Numbering: (1), (2), (3)... NEVER bullet points in the T&Cs.
-- Replace any PMG / operator / brand name in conditions (e.g. "UniLodge",
-  "FSL", the operator) with "Property Management". EXCEPTION: keep the actual
-  property name where it identifies the property (e.g. "a new eligible resident
-  at UniLodge Melbourne Central" stays, but "any other UniLodge property"
-  becomes "any other Property Management property", and "UniLodge reserves the
-  right" becomes "Property Management reserves the right").
+- Replace the PMG / operator / landlord / management-company / brand name in
+  conditions with "Property Management". This applies to ANY such name, even one
+  you have never seen before, not just the examples. The operator name is the
+  company that owns or runs the property or that sent the offer. It often looks
+  like a company name ending in or containing words such as Group, Living,
+  Management, Properties, Residences, Partnerships, Estates, Student, PBSA, Ltd,
+  LLC, Inc, or similar (e.g. "UniLodge", "FSL", "Maple Living Group",
+  "Cardinal Group", "Student Roost"). Whenever such a name appears in a term as
+  the party doing something (reserving rights, crediting, amending, being not
+  liable, "as per X's terms", "any other X property"), replace it with
+  "Property Management".
+  EXCEPTION: keep the actual PROPERTY name where it merely identifies the
+  property (e.g. "a new eligible resident at UniLodge Melbourne Central" stays),
+  but "any other UniLodge property" becomes "any other Property Management
+  property", and "Maple Living Group reserves the right" becomes "Property
+  Management reserves the right".
 - NEVER use first-person words (we, us, our). Rephrase any such line.
 - Remove anything revealing property-management details: email addresses,
   phone numbers, internal contacts, mailing addresses, copyright lines.

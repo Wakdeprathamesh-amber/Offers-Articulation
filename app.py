@@ -74,7 +74,7 @@ def postprocess(data: dict) -> dict:
     well-formed dict, then clean dashes, strip agent/commission terms (and
     renumber), and finally annotate title lengths.
     """
-    return _annotate(_clean_agent_terms(_strip_dashes(_normalize(data))))
+    return _annotate(_rename_operator(_clean_agent_terms(_strip_dashes(_normalize(data)))))
 
 
 def _normalize(data: dict) -> dict:
@@ -189,6 +189,39 @@ def _clean_agent_terms(data: dict) -> dict:
                 continue  # remove agent/commission clause
             kept.append(body.strip())
         offer["terms"] = [f"({i+1}) {b}" for i, b in enumerate(kept)]
+    return data
+
+
+import re as _re
+
+# A capitalised company-style name of 1-6 words (e.g. "Maple Living Group").
+_NAME = r"[A-Z][A-Za-z&.'-]*(?:\s+[A-Z0-9][A-Za-z&.'0-9-]*){0,5}"
+_RESERVES_RE = _re.compile(rf"\b{_NAME}\s+reserves the right")
+_OTHER_PROP_RE = _re.compile(rf"\bany other\s+{_NAME}\s+(propert(?:y|ies))")
+
+
+def _rename_operator(data: dict) -> dict:
+    """Deterministic safety net for the two most common spots an operator name
+    leaks through despite the prompt: '<Operator> reserves the right ...' and
+    'any other <Operator> property'. Replaces the operator name with
+    'Property Management'. Conservative: only fires on these exact patterns, so
+    it never touches a property name used elsewhere.
+    """
+
+    def fix(text: str) -> str:
+        if not isinstance(text, str):
+            return text
+        text = _RESERVES_RE.sub("Property Management reserves the right", text)
+        text = _OTHER_PROP_RE.sub(
+            lambda m: f"any other Property Management {m.group(1)}", text
+        )
+        return text
+
+    for offer in data.get("offers", []) or []:
+        if isinstance(offer.get("body"), str):
+            offer["body"] = fix(offer["body"])
+        if isinstance(offer.get("terms"), list):
+            offer["terms"] = [fix(t) for t in offer["terms"]]
     return data
 
 
