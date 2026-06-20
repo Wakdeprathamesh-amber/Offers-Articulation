@@ -1,0 +1,16 @@
+# Render Blueprint for the amber Offer Content Automation app.
+# In the Render dashboard: New + > Blueprint, point it at this repo.
+services:
+  - type: web
+    name: amber-offer-automation
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false          # set this securely in the Render dashboard, never in code
+      - key: OPENAI_MODEL
+        value: gpt-4o
+      - key: PYTHON_VERSION
+        value: 3.12.6

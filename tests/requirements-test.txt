@@ -1,0 +1,4 @@
+# Test-only dependencies (install into the same venv):
+#   pip install -r tests/requirements-test.txt
+pytest>=8.0
+reportlab>=4.0   # used to generate a text-based PDF for the happy-path extraction test
