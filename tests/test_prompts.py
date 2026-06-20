@@ -50,9 +50,9 @@ def test_build_user_prompt_injects_known_currency(prompts, country, symbol):
 
 
 def test_build_user_prompt_unknown_country(prompts):
-    p = prompts.build_user_prompt("France", "Prop", "offer")
+    p = prompts.build_user_prompt("Brazil", "Prop", "offer")
     assert "use the correct local currency symbol" in p
-    assert "France" in p
+    assert "Brazil" in p
 
 
 def test_build_user_prompt_empty_country(prompts):

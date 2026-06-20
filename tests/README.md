@@ -20,7 +20,28 @@ pytest tests/test_sanitizers.py   # a single file
 
 ```bash
 RUN_LIVE_TESTS=1 OPENAI_API_KEY=sk-... pytest tests/test_live_examples.py -v
+RUN_LIVE_TESTS=1 OPENAI_API_KEY=sk-... pytest tests/test_sop_compliance_live.py -v
 ```
+
+### SOP compliance eval (the important one)
+
+`sop_checker.py` encodes the SOP as automated assertions (title rules, currency,
+Title Case, digits, power words, no dashes, CTA, numbered T&Cs, no first-person,
+no agent clauses, no operator-name leaks, no emails/phones, applicability). It is
+**unit-tested** (`test_sop_checker.py`) and then run over **live** model output
+across a broad scenario library (`scenarios.py`, ~12 diverse offers across
+countries / reward types / exclusions / traps).
+
+Run a human-readable live report any time you change the prompt:
+
+```bash
+python run_eval.py            # full report
+python run_eval.py --quiet    # only failures + summary
+```
+
+This eval is what catches *content* bugs (e.g. an operator name leaking, or an
+offer wrongly rejected because its T&Cs mention agent commission) that the
+plumbing tests cannot. Always run it before shipping a prompt change.
 
 ## What is covered
 
@@ -32,8 +53,11 @@ RUN_LIVE_TESTS=1 OPENAI_API_KEY=sk-... pytest tests/test_live_examples.py -v
 | `test_annotate.py` | Title length status | 60 target / 72 hard cap boundaries, missing/None title, unicode currency char count |
 | `test_postprocess.py` | Full pipeline + `generate_offer` (mocked OpenAI) | combined clean+normalize+renumber, idempotency, bad-JSON propagation |
 | `test_routes.py` | Flask endpoints | `/` loads; `/generate` empty/no-key/happy/exception/non-JSON/bad-model-JSON; `/extract-pdf` no-file/wrong-ext/real-image-PDF warning/extraction-error/happy |
+| `test_operator_rename.py` | Operator-name safety net | unseen operators in "reserves the right" / "any other X property"; property name untouched; idempotent |
 | `test_pdf.py` | PDF extraction | real example PDFs have no text layer; generated text PDF extracts; corrupt PDF raises |
+| `test_sop_checker.py` | The SOP linter itself | good output passes; each rule (currency, hard cap, Book-start, digits, Title Case, power word, first-person, operator leak, agent clause, email, bullets, dashes, CTA, applicability) is flagged on a bad sample |
 | `test_live_examples.py` | Live quality (opt-in) | UK £500, US multi-offer varied hooks, AUS T&C agent-clause removal, direct-booking/lucky-draw flagging |
+| `test_sop_compliance_live.py` | Live SOP compliance (opt-in) | every scenario in `scenarios.py` must produce ZERO SOP errors |
 
 ## Adding tests for new features
 

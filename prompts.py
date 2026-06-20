@@ -22,7 +22,8 @@ GENERIC_TNC = [
     "Prices and availability are subject to change.",
 ]
 
-# Currency map by country (from SOP).
+# Currency map by country. The first five are from the SOP; the rest extend
+# coverage to other amber markets (the checker and prompt use this).
 CURRENCY_MAP = {
     "United Kingdom": "£",
     "UK": "£",
@@ -33,6 +34,19 @@ CURRENCY_MAP = {
     "AUS": "AU$",
     "Canada": "CA$",
     "Singapore": "S$",
+    # Eurozone markets
+    "Ireland": "€",
+    "Germany": "€",
+    "Spain": "€",
+    "France": "€",
+    "Italy": "€",
+    "Netherlands": "€",
+    "Portugal": "€",
+    "Austria": "€",
+    "Belgium": "€",
+    # Other
+    "New Zealand": "NZ$",
+    "Hong Kong": "HK$",
 }
 
 POWER_WORDS = [
@@ -75,15 +89,38 @@ GOLDEN RULES
 ================================================================
 APPLICABILITY / EXCLUSION RULES (run this first)
 ================================================================
-Mark the offer NOT applicable (applicable=false) and explain why if ANY apply:
-- The offer is for DIRECT bookings only ("Direct Bookings", "Book Directly", or
-  only for people booking directly with the property), UNLESS the source
-  explicitly says it is also valid for booking agents / education agents /
-  referral agents / international agents.
+CRITICAL — AGENTS MEAN APPLICABLE, NOT EXCLUDED.
+Amber IS a booking agent. If the offer or its T&Cs mention agent commission, an
+agent booking portal, an agent code, booking agents, education agents, or
+referral agents, that means the offer is available THROUGH agents, so it IS
+applicable to Amber. In that case set applicable=true. NEVER mark an offer
+not-applicable just because it mentions agents, agent commission, or an agent
+portal. (You will still REMOVE those agent clauses from the final T&Cs, but
+their presence does NOT affect applicability and is NOT a "direct booking"
+signal.)
+
+Mark the offer NOT applicable (applicable=false) and explain why ONLY if ANY of
+these apply:
+- The offer is restricted to DIRECT bookings with NO agent path: it explicitly
+  says something like "Direct Bookings only", "Book Directly only", "valid only
+  for direct bookings", or "not available through agents". A booking link, a
+  "Book now" call to action, or an agent-commission clause is NOT a direct-only
+  restriction.
 - It is a LUCKY DRAW / prize offer (e.g. "Get a chance to...", "win", "raffle").
-- It is a REFER-A-FRIEND / referral-reward offer.
-- Pure low-rate / price-drop-only offers (no incentive such as cashback,
-  discount, gift card, rent-free, rebate, concession) — flag for review.
+- It is a REFER-A-FRIEND / referral-reward offer (the reward is for referring
+  someone, not for the booking itself).
+- PURE low-rate / price-drop-only offers, meaning the ONLY thing on offer is a
+  cheaper rate with NO incentive such as cashback, discount, gift card,
+  rent-free, rebate, or concession: set applicable=false or
+  needs_kam_confirmation=true and flag "low_rate" for review.
+  IMPORTANT: if the offer includes ANY such incentive (even a small one, e.g.
+  "lower rates PLUS £100 cashback"), it is APPLICABLE (applicable=true). Build
+  the content around the incentive. "Lower rates" combined with a cashback /
+  discount / gift card / rent-free reward is NOT a low-rate exclusion.
+
+If none of the above apply, the offer is applicable=true. A normal cashback /
+discount / gift card / rent-free offer is applicable even if its T&Cs happen to
+describe agent commission terms, and even if it also advertises lower rates.
 
 Set needs_kam_confirmation=true when applicability to booking agents is unclear,
 when it looks like a direct-booking offer that might be extendable to Amber, or
