@@ -54,7 +54,10 @@ publishing** panel so the reviewer can correct it before copying.
 
 - **Text only.** Image / screenshot offers must be copied out and pasted — a
   scanned PDF with no text layer will warn you. (Vision support is a v2 item.)
-- Model defaults to `gpt-4o`; override with `OPENAI_MODEL`.
+- Model defaults to `gpt-4o` in code; production (Render) is set to `gpt-5.5` for
+  best articulation. Override with `OPENAI_MODEL`. The OpenAI call is model-agnostic
+  (it drops `temperature` automatically for models that reject a custom value, e.g.
+  gpt-5/gpt-5.5). Tune the per-request timeout with `OPENAI_TIMEOUT` (default 60s).
 - The app never hardcodes your key — it reads `OPENAI_API_KEY` from the env/.env.
 
 ## Deploy to Render
