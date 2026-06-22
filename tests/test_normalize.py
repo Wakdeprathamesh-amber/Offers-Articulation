@@ -75,3 +75,22 @@ def test_non_string_title_body_coerced(appmod):
 def test_applicable_truthy_coerced_to_bool(appmod):
     out = appmod._normalize({"applicable": "yes"})
     assert out["applicable"] is True
+
+
+def test_detected_operator_names_defaults_empty(appmod):
+    assert appmod._normalize({})["detected_operator_names"] == []
+
+
+def test_detected_operator_names_string_becomes_list(appmod):
+    out = appmod._normalize({"detected_operator_names": "Maple Living Group"})
+    assert out["detected_operator_names"] == ["Maple Living Group"]
+
+
+def test_detected_operator_names_filters_blanks(appmod):
+    out = appmod._normalize({"detected_operator_names": ["", "  ", "FSL"]})
+    assert out["detected_operator_names"] == ["FSL"]
+
+
+def test_source_has_tncs_coerced_to_bool(appmod):
+    assert appmod._normalize({"source_has_tncs": "yes"})["source_has_tncs"] is True
+    assert appmod._normalize({})["source_has_tncs"] is False

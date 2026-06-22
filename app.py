@@ -122,6 +122,14 @@ def _normalize(data: dict) -> dict:
             }
         )
     data["offers"] = clean_offers
+
+    names = data.get("detected_operator_names")
+    if isinstance(names, str):
+        names = [names]
+    elif not isinstance(names, list):
+        names = []
+    data["detected_operator_names"] = [str(n).strip() for n in names if str(n).strip()]
+    data["source_has_tncs"] = bool(data.get("source_has_tncs", False))
     return data
 
 
