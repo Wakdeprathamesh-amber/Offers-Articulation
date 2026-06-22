@@ -322,15 +322,40 @@ _RESERVES_RE = _re.compile(rf"\b{_NAME}\s+reserves the right")
 _OTHER_PROP_RE = _re.compile(rf"\bany other\s+{_NAME}\s+(propert(?:y|ies))")
 
 
-def _rename_operator(data: dict) -> dict:
-    """Deterministic safety net for the two most common spots an operator name
-    leaks through despite the prompt: '<Operator> reserves the right ...' and
-    'any other <Operator> property'. Replaces the operator name with
-    'Property Management'. Conservative: only fires on these exact patterns, so
-    it never touches a property name used elsewhere.
+# Generic words that must never be blanket-replaced as if they were an operator name.
+_OP_STOPWORDS = {
+    "property management", "the operator", "operator", "landlord",
+    "management", "the property", "student", "living", "group", "residences",
+}
+
+
+def _safe_operator_names(detected, props_blob):
+    """Operator names safe to blanket-replace: not generic, not part of the
+    property's own name (those are left to the conservative regex net)."""
+    out = []
+    for n in detected or ():
+        s = (n or "").strip()
+        if len(s) < 3:
+            continue
+        low = s.lower()
+        if low in _OP_STOPWORDS:
+            continue
+        if low in props_blob:
+            continue
+        out.append(s)
+    return out
+
+
+def _rename_operator(data: dict, detected_names=()) -> dict:
+    """Replace operator/PMG names with 'Property Management'. Two layers:
+    (1) blanket-replace any model-reported operator name that does not overlap the
+        property name; (2) the conservative regex net for the two common leak
+        patterns ('<Operator> reserves the right', 'any other <Operator> property'),
+        which also covers names the model failed to report and never touches a
+        property name used elsewhere.
     """
 
-    def fix(text: str) -> str:
+    def fix_patterns(text: str) -> str:
         if not isinstance(text, str):
             return text
         text = _RESERVES_RE.sub("Property Management reserves the right", text)
@@ -340,10 +365,20 @@ def _rename_operator(data: dict) -> dict:
         return text
 
     for offer in data.get("offers", []) or []:
+        props_blob = " ".join(offer.get("properties") or []).lower()
+        safe = _safe_operator_names(detected_names, props_blob)
+
+        def blanket(text):
+            if not isinstance(text, str):
+                return text
+            for name in safe:
+                text = re.sub(rf"\b{re.escape(name)}\b", "Property Management", text, flags=re.I)
+            return text
+
         if isinstance(offer.get("body"), str):
-            offer["body"] = fix(offer["body"])
+            offer["body"] = fix_patterns(blanket(offer["body"]))
         if isinstance(offer.get("terms"), list):
-            offer["terms"] = [fix(t) for t in offer["terms"]]
+            offer["terms"] = [fix_patterns(blanket(t)) for t in offer["terms"]]
     return data
 
 

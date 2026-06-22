@@ -75,3 +75,44 @@ def test_runs_inside_full_postprocess(appmod):
     joined = " ".join(out["offers"][0]["terms"])
     assert "Maple Living Group" not in joined
     assert joined.count("Property Management") == 2
+
+
+def test_detected_name_blanket_replaced_in_terms(appmod):
+    out = appmod._rename_operator(
+        {"offers": [{"properties": ["Maple Heights Residences, Toronto"],
+                     "terms": ["(1) The cashback is credited by Maple Living Group after move-in."]}]},
+        detected_names=["Maple Living Group"],
+    )
+    t = out["offers"][0]["terms"][0]
+    assert "Maple Living Group" not in t
+    assert "credited by Property Management after move-in" in t
+
+
+def test_detected_name_in_body_replaced(appmod):
+    out = appmod._rename_operator(
+        {"offers": [{"properties": ["Radford Mill, Nottingham"],
+                     "body": "As per FSL policy, the discount applies after move-in."}]},
+        detected_names=["FSL"],
+    )
+    assert "FSL" not in out["offers"][0]["body"]
+    assert "As per Property Management policy" in out["offers"][0]["body"]
+
+
+def test_detected_name_overlapping_property_not_blanket_replaced(appmod):
+    out = appmod._rename_operator(
+        {"offers": [{"properties": ["UniLodge Melbourne Central"],
+                     "terms": ["(1) You must be a resident at UniLodge Melbourne Central to qualify.",
+                               "(2) UniLodge reserves the right to amend."]}]},
+        detected_names=["UniLodge"],
+    )
+    terms = out["offers"][0]["terms"]
+    assert "resident at UniLodge Melbourne Central" in terms[0]   # kept
+    assert terms[1] == "(2) Property Management reserves the right to amend."  # regex net
+
+
+def test_generic_detected_names_ignored(appmod):
+    out = appmod._rename_operator(
+        {"offers": [{"properties": ["X"], "terms": ["(1) Management will review applications."]}]},
+        detected_names=["Management"],
+    )
+    assert out["offers"][0]["terms"][0] == "(1) Management will review applications."
