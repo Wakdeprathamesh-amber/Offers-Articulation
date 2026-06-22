@@ -155,8 +155,15 @@ def check_compliance(result, context):
                 continue
             is_first = idx == 0
             low = word.lower()
+            # "Up to" is an idiom (capitalised in the SOP's own example), not a
+            # preposition here, so don't flag "Up" when it is followed by "to".
+            next_word = (
+                re.sub(r"[^A-Za-z]", "", tokens[idx + 1]).lower()
+                if idx + 1 < len(tokens) else ""
+            )
+            is_up_to_idiom = low == "up" and next_word == "to"
             if (not is_first and not after_colon and low in _FUNCTION_WORDS
-                    and word[0].isupper()):
+                    and word[0].isupper() and not is_up_to_idiom):
                 violations.append(
                     _v("warn", "TITLE_CASE", f"function word '{word}' should be lowercase in Title Case", i))
             after_colon = tok.endswith(":")

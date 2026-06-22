@@ -165,3 +165,16 @@ def _mutate_terms(terms):
     d = _clone(GOOD)
     d["offers"][0]["terms"] = terms
     return d
+
+
+def test_up_to_idiom_not_flagged_title_case():
+    # "Up to" is the idiom used in the SOP's own canonical example; must not warn.
+    ok = _mutate_title("Big Savings: Get Up to 2 Weeks Rent FREE!")
+    v = check_compliance(ok, GOOD_CTX)
+    assert "TITLE_CASE" not in _rules(v)
+
+
+def test_genuine_title_case_still_flagged():
+    bad = _mutate_title("Save CA$200 On Select Studios!")  # 'On' wrongly capitalised
+    v = check_compliance(bad, GOOD_CTX)
+    assert "TITLE_CASE" in _rules(v)
