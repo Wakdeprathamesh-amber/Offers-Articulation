@@ -49,10 +49,10 @@ def extract_pdf_text(file_storage) -> str:
 
 
 def generate_offer(country: str, property_name: str, raw_offer: str) -> dict:
-    """Call the OpenAI API and return the parsed JSON result."""
+    """Call the OpenAI API and return the parsed, post-processed, SOP-checked result."""
     from openai import OpenAI
 
-    client = OpenAI()  # reads OPENAI_API_KEY from env
+    client = OpenAI(timeout=30, max_retries=2)  # reads OPENAI_API_KEY from env
     user_prompt = build_user_prompt(country, property_name, raw_offer)
 
     response = client.chat.completions.create(
@@ -65,7 +65,26 @@ def generate_offer(country: str, property_name: str, raw_offer: str) -> dict:
         ],
     )
     data = json.loads(response.choices[0].message.content)
-    return postprocess(data)
+    result = postprocess(data, country=country)
+    result["warnings"] = _compliance_warnings(result, country)
+    return result
+
+
+def _compliance_warnings(result: dict, country: str) -> list:
+    """Run the SOP checker over the final output and return any violations.
+    Informational only; never raises."""
+    from sop_checker import check_compliance
+
+    ctx = {
+        "country": country,
+        "operator_names": result.get("detected_operator_names", []),
+        "source_has_tncs": result.get("source_has_tncs", False),
+    }
+    try:
+        return check_compliance(result, ctx)
+    except Exception:
+        app.logger.exception("compliance check failed")
+        return []
 
 
 def postprocess(data: dict, country: str = "") -> dict:
