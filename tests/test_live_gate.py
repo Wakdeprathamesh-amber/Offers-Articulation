@@ -49,3 +49,47 @@ def test_warnings_never_crash_on_odd_output(appmod, monkeypatch):
     _fake(monkeypatch, {"applicable": True, "offers": []})
     out = appmod.generate_offer("United Kingdom", "P", "raw")
     assert isinstance(out["warnings"], list)
+
+
+def test_operator_name_inside_property_not_flagged(appmod, monkeypatch):
+    # 'UniLodge' is part of the property name -> the kept property mention must
+    # NOT trigger a TERMS_OPERATOR error in the live gate.
+    _fake(monkeypatch, {
+        "applicable": True, "assessment": "ok", "flags": ["none"],
+        "needs_kam_confirmation": False, "source_has_tncs": True,
+        "detected_operator_names": ["UniLodge"],
+        "offers": [{
+            "properties": ["UniLodge Melbourne Central"],
+            "title": "Big Savings: Get 2 Weeks Rent FREE!",
+            "body": "Book at UniLodge Melbourne Central and enjoy 2 weeks rent FREE! Apply now!",
+            "terms": ["(1) You must be a new resident at UniLodge Melbourne Central to qualify.",
+                      "(2) Property Management reserves the right to amend."],
+            "missing_info": [],
+        }],
+    })
+    out = appmod.generate_offer("Australia", "UniLodge Melbourne Central", "raw")
+    rules = {w["rule"] for w in out["warnings"]}
+    assert "TERMS_OPERATOR" not in rules
+
+
+def test_leaked_operator_is_removed_and_not_flagged(appmod, monkeypatch):
+    # Operator name NOT part of the property -> auto-renamed away by the pipeline,
+    # so the final output is clean and carries no TERMS_OPERATOR warning.
+    _fake(monkeypatch, {
+        "applicable": True, "assessment": "ok", "flags": ["none"],
+        "needs_kam_confirmation": False, "source_has_tncs": True,
+        "detected_operator_names": ["Maple Living Group"],
+        "offers": [{
+            "properties": ["Maple Heights Residences, Toronto"],
+            "title": "Special Deal: Get CA$750 CASHBACK!",
+            "body": "Receive CA$750 at Maple Heights Residences. Apply now!",
+            "terms": ["(1) Credited by Maple Living Group after move-in."],
+            "missing_info": [],
+        }],
+    })
+    out = appmod.generate_offer("Canada", "Maple Heights Residences, Toronto", "raw")
+    joined = " ".join(out["offers"][0]["terms"])
+    assert "Maple Living Group" not in joined          # auto-renamed
+    assert "Property Management" in joined
+    rules = {w["rule"] for w in out["warnings"]}
+    assert "TERMS_OPERATOR" not in rules

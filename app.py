@@ -103,9 +103,19 @@ def _compliance_warnings(result: dict, country: str) -> list:
     Informational only; never raises."""
     from sop_checker import check_compliance
 
+    # Only treat a detected name as a leak risk if it is NOT part of a property
+    # name. An operator name that overlaps the property (e.g. "UniLodge" in
+    # "UniLodge Melbourne Central") is legitimately kept in the property mention,
+    # so passing it would raise a false TERMS_OPERATOR error.
+    props_blob = " ".join(
+        p for o in (result.get("offers") or []) for p in (o.get("properties") or [])
+    ).lower()
+    detected = result.get("detected_operator_names", []) or []
+    operator_names = [n for n in detected if n and n.lower() not in props_blob]
+
     ctx = {
         "country": country,
-        "operator_names": result.get("detected_operator_names", []),
+        "operator_names": operator_names,
         "source_has_tncs": result.get("source_has_tncs", False),
     }
     try:
