@@ -34,9 +34,15 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB upload cap
 
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+TEMPERATURE = float(os.environ.get("OPENAI_TEMPERATURE", "0.3"))
 MAX_TITLE = 60
 HARD_TITLE_CAP = 72
 MAX_RAW_OFFER_CHARS = 20000
+
+# Some models (e.g. gpt-5 / gpt-5.5) only accept the default temperature and reject
+# a custom one with a 400. We optimistically send TEMPERATURE; if the model rejects
+# it we drop it for the rest of the session so only the first call pays the retry.
+_SEND_TEMPERATURE = True
 
 
 @app.errorhandler(413)
@@ -59,18 +65,33 @@ def generate_offer(country: str, property_name: str, raw_offer: str) -> dict:
     """Call the OpenAI API and return the parsed, post-processed, SOP-checked result."""
     from openai import OpenAI
 
+    global _SEND_TEMPERATURE
     client = OpenAI(timeout=30, max_retries=2)  # reads OPENAI_API_KEY from env
     user_prompt = build_user_prompt(country, property_name, raw_offer)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
 
-    response = client.chat.completions.create(
-        model=MODEL,
-        temperature=0.3,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-    )
+    def _create(send_temperature: bool):
+        kwargs = {
+            "model": MODEL,
+            "response_format": {"type": "json_object"},
+            "messages": messages,
+        }
+        if send_temperature:
+            kwargs["temperature"] = TEMPERATURE
+        return client.chat.completions.create(**kwargs)
+
+    try:
+        response = _create(_SEND_TEMPERATURE)
+    except Exception as exc:
+        # Models like gpt-5/gpt-5.5 reject a custom temperature; retry without it.
+        if _SEND_TEMPERATURE and "temperature" in str(exc).lower():
+            _SEND_TEMPERATURE = False
+            response = _create(False)
+        else:
+            raise
     data = json.loads(response.choices[0].message.content)
     result = postprocess(data, country=country)
     result["warnings"] = _compliance_warnings(result, country)
