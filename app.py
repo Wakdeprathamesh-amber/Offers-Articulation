@@ -16,6 +16,7 @@ Then open http://127.0.0.1:5000
 
 import json
 import os
+import re
 
 from flask import Flask, jsonify, render_template, request
 
@@ -150,6 +151,57 @@ def _clean_dashes(text: str) -> str:
         text = text[2:]
     text = text.replace("\n, ", "\n")
     return text
+
+
+# Contact-info patterns (used to scrub emails / URLs / phone numbers per SOP).
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+_URL_RE = re.compile(r"\b(?:https?://|www\.)\S+", re.I)
+_PHONE_RE = re.compile(r"(?:\+\d[\d\s\-()]{7,}\d)|(?:\b\d{3}[\s.\-]\d{3}[\s.\-]\d{4}\b)")
+_CONTACT_LEADINS = (
+    "contact", "email", "e-mail", "call", "phone", "questions", "queries",
+    "for queries", "for details", "for more", "reach us", "reach out",
+)
+
+
+def _scrub_contact_text(text: str) -> str:
+    """Remove email/URL/phone tokens from a string and tidy the leftover artefacts."""
+    if not isinstance(text, str):
+        return text
+    text = _EMAIL_RE.sub("", text)
+    text = _URL_RE.sub("", text)
+    text = _PHONE_RE.sub("", text)
+    text = re.sub(r"\(\s*\)", "", text)            # empty parens left behind
+    text = re.sub(r"\s+([.,;:!?])", r"\1", text)   # space before punctuation
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip()
+
+
+def _strip_contact_info(data: dict) -> dict:
+    """Remove emails/URLs/phone numbers from body and terms. Drop a term that is
+    only a contact instruction; keep and scrub a term with embedded contact info."""
+    for offer in data.get("offers", []) or []:
+        if isinstance(offer.get("body"), str):
+            offer["body"] = _scrub_contact_text(offer["body"])
+        terms = offer.get("terms")
+        if not isinstance(terms, list):
+            continue
+        kept = []
+        for t in terms:
+            body = re.sub(r"^\s*\(?\d+\)?[.)]?\s*", "", str(t))  # strip leading (n)/n.
+            had_contact = bool(
+                _EMAIL_RE.search(body) or _URL_RE.search(body) or _PHONE_RE.search(body)
+            )
+            scrubbed = _scrub_contact_text(body)
+            if not re.sub(r"[^A-Za-z0-9]", "", scrubbed):
+                continue  # nothing substantive remains
+            low = scrubbed.lower()
+            if had_contact and len(scrubbed.split()) <= 6 and any(
+                low.startswith(c) for c in _CONTACT_LEADINS
+            ):
+                continue  # contact-only stub
+            kept.append(scrubbed)
+        offer["terms"] = [f"({i+1}) {b}" for i, b in enumerate(kept)]
+    return data
 
 
 def _strip_dashes(data: dict) -> dict:
