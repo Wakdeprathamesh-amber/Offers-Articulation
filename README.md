@@ -44,6 +44,12 @@ Output shows an applicability verdict (✓ / ✗ / ⚠ needs KAM), exclusion fla
 and for each offer the Title (with live character count vs the 60/72 limits),
 Body, numbered T&Cs, and anything missing from the source.
 
+The app deterministically cleans the model output before showing it (removes em/en
+dashes, agent/commission clauses, contact details; renames the operator to
+"Property Management"; normalises the currency; fixes common first-person wording).
+Anything the automatic cleaner cannot safely fix is listed in a **⚠ Review before
+publishing** panel so the reviewer can correct it before copying.
+
 ## Notes / limits (v1)
 
 - **Text only.** Image / screenshot offers must be copied out and pasted — a
