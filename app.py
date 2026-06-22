@@ -204,6 +204,33 @@ def _strip_contact_info(data: dict) -> dict:
     return data
 
 
+# Distinctive currency tokens, ordered longest-first so "US$" is one token, never "S$".
+_CURRENCY_TOKEN_RE = re.compile(r"US\$|AU\$|CA\$|NZ\$|HK\$|S\$|£|€")
+
+
+def _fix_currency(data: dict, expected_symbol) -> dict:
+    """When the country maps to a known symbol, replace any other distinctive
+    currency token in title/body with the expected one (the number is preserved).
+    No-op when the symbol is unknown."""
+    if not expected_symbol:
+        return data
+
+    def fix(text):
+        if not isinstance(text, str):
+            return text
+        return _CURRENCY_TOKEN_RE.sub(
+            lambda m: expected_symbol if m.group(0) != expected_symbol else m.group(0),
+            text,
+        )
+
+    for offer in data.get("offers", []) or []:
+        if isinstance(offer.get("title"), str):
+            offer["title"] = fix(offer["title"])
+        if isinstance(offer.get("body"), str):
+            offer["body"] = fix(offer["body"])
+    return data
+
+
 def _strip_dashes(data: dict) -> dict:
     """Apply dash cleaning across all generated text fields."""
     if isinstance(data.get("assessment"), str):
