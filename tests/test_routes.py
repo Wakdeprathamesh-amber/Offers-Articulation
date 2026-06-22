@@ -127,3 +127,36 @@ def test_extract_pdf_happy_path_mocked(client, appmod, monkeypatch):
     r = client.post("/extract-pdf", data=data, content_type="multipart/form-data")
     assert r.status_code == 200
     assert r.get_json()["text"] == "Extracted offer text here"
+
+
+def test_raw_offer_too_long_returns_400(client, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    r = client.post("/generate", json={"raw_offer": "x" * 20001})
+    assert r.status_code == 400
+    assert "too long" in r.get_json()["error"].lower()
+
+
+def test_generate_error_message_is_sanitized(client, appmod, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    def boom(*a, **k):
+        raise RuntimeError("super secret internal detail")
+
+    monkeypatch.setattr(appmod, "generate_offer", boom)
+    r = client.post("/generate", json={"raw_offer": "offer"})
+    assert r.status_code == 500
+    body = r.get_json()["error"]
+    assert "secret internal detail" not in body
+    assert "Generation failed" in body
+
+
+def test_max_content_length_configured(appmod):
+    assert appmod.app.config.get("MAX_CONTENT_LENGTH") == 8 * 1024 * 1024
+
+
+def test_extract_pdf_missing_filename_guarded(client, appmod, monkeypatch):
+    import io
+    # filename="" should be a clean 400, not a crash
+    data = {"pdf": (io.BytesIO(b"%PDF-1.4"), "")}
+    r = client.post("/extract-pdf", data=data, content_type="multipart/form-data")
+    assert r.status_code == 400

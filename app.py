@@ -31,10 +31,17 @@ except Exception:
     pass
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB upload cap
 
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 MAX_TITLE = 60
 HARD_TITLE_CAP = 72
+MAX_RAW_OFFER_CHARS = 20000
+
+
+@app.errorhandler(413)
+def _too_large(_e):
+    return jsonify({"error": "File too large. Maximum upload size is 8 MB."}), 413
 
 
 def extract_pdf_text(file_storage) -> str:
@@ -438,12 +445,14 @@ def extract_pdf():
     if "pdf" not in request.files:
         return jsonify({"error": "No PDF uploaded."}), 400
     f = request.files["pdf"]
-    if not f.filename.lower().endswith(".pdf"):
+    filename = (f.filename or "").lower()
+    if not filename.endswith(".pdf"):
         return jsonify({"error": "Please upload a .pdf file."}), 400
     try:
         text = extract_pdf_text(f)
-    except Exception as exc:
-        return jsonify({"error": f"Could not read PDF: {exc}"}), 400
+    except Exception:
+        app.logger.exception("pdf extraction failed")
+        return jsonify({"error": "Could not read PDF. Please ensure it is a valid PDF file."}), 400
     if not text:
         return jsonify(
             {
@@ -467,6 +476,10 @@ def generate():
 
     if not raw_offer:
         return jsonify({"error": "Please provide the raw offer text."}), 400
+    if len(raw_offer) > MAX_RAW_OFFER_CHARS:
+        return jsonify(
+            {"error": f"Offer text is too long (max {MAX_RAW_OFFER_CHARS} characters)."}
+        ), 400
     if not os.environ.get("OPENAI_API_KEY"):
         return jsonify(
             {"error": "OPENAI_API_KEY is not set. Add it to your environment or .env file."}
@@ -474,8 +487,9 @@ def generate():
 
     try:
         result = generate_offer(country, property_name, raw_offer)
-    except Exception as exc:
-        return jsonify({"error": f"Generation failed: {exc}"}), 500
+    except Exception:
+        app.logger.exception("generation failed")
+        return jsonify({"error": "Generation failed. Please try again."}), 500
 
     return jsonify(result)
 
@@ -484,5 +498,5 @@ if __name__ == "__main__":
     # Local/dev entrypoint. In production (Render) gunicorn imports `app` directly
     # via the start command, so this block is not used there.
     port = int(os.environ.get("PORT", 5000))
-    debug = os.environ.get("FLASK_DEBUG", "1").lower() in ("1", "true", "yes")
+    debug = os.environ.get("FLASK_DEBUG", "0").lower() in ("1", "true", "yes")
     app.run(host="0.0.0.0", port=port, debug=debug)
