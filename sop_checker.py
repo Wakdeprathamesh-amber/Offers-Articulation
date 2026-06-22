@@ -47,7 +47,10 @@ _AGENT_MARKERS = (
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 _URL_RE = re.compile(r"(https?://|www\.)", re.I)
 _PHONE_RE = re.compile(r"(\+\d[\d\s\-()]{7,}\d)|(\b\d{3}[\s.\-]\d{3}[\s.\-]\d{4}\b)")
-_FIRST_PERSON_RE = re.compile(r"\b(we|us|our|ours|we're|we've|we'll|i'm)\b", re.I)
+# First-person pronouns. "us" is handled separately and case-sensitively so the
+# all-caps country/currency token "US" / "US$" is not misread as the pronoun "us".
+_FIRST_PERSON_RE = re.compile(r"\b(we|our|ours|we're|we've|we'll|i'm)\b", re.I)
+_US_PRONOUN_RE = re.compile(r"\bus\b")  # lowercase only: matches the pronoun, not "US"/"US$"
 _NUMBER_WORD_UNIT_RE = re.compile(
     r"\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+"
     r"(week|weeks|month|months|day|days|bedroom|bedrooms|year|years)\b",
@@ -209,7 +212,7 @@ def check_compliance(result, context):
         if seq and seq != list(range(1, len(seq) + 1)):
             violations.append(_v("warn", "TERMS_SEQUENCE", f"terms not numbered sequentially: {seq}", i))
 
-        if _FIRST_PERSON_RE.search(joined):
+        if _FIRST_PERSON_RE.search(joined) or _US_PRONOUN_RE.search(joined):
             violations.append(_v("error", "TERMS_FIRST_PERSON", "terms use first-person (we/us/our)", i))
 
         if _EMAIL_RE.search(joined) or _URL_RE.search(joined) or _PHONE_RE.search(joined):

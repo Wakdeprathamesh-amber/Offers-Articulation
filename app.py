@@ -35,6 +35,9 @@ app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB upload cap
 
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 TEMPERATURE = float(os.environ.get("OPENAI_TEMPERATURE", "0.3"))
+# Per-attempt request timeout (seconds). Flagship models (gpt-5/5.5) are slower
+# than gpt-4o, so default generously; override with OPENAI_TIMEOUT.
+OPENAI_TIMEOUT = float(os.environ.get("OPENAI_TIMEOUT", "60"))
 MAX_TITLE = 60
 HARD_TITLE_CAP = 72
 MAX_RAW_OFFER_CHARS = 20000
@@ -66,7 +69,7 @@ def generate_offer(country: str, property_name: str, raw_offer: str) -> dict:
     from openai import OpenAI
 
     global _SEND_TEMPERATURE
-    client = OpenAI(timeout=30, max_retries=2)  # reads OPENAI_API_KEY from env
+    client = OpenAI(timeout=OPENAI_TIMEOUT, max_retries=2)  # reads OPENAI_API_KEY from env
     user_prompt = build_user_prompt(country, property_name, raw_offer)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},

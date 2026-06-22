@@ -178,3 +178,17 @@ def test_genuine_title_case_still_flagged():
     bad = _mutate_title("Save CA$200 On Select Studios!")  # 'On' wrongly capitalised
     v = check_compliance(bad, GOOD_CTX)
     assert "TITLE_CASE" in _rules(v)
+
+
+def test_us_currency_not_flagged_as_first_person():
+    # 'US$600' / 'US' (country) must NOT be read as the pronoun 'us'.
+    ok = _clone(GOOD)
+    ok["offers"][0]["terms"] = ["(1) Eligible residents receive a US$600 gift card after move-in."]
+    v = check_compliance(ok, {**GOOD_CTX, "country": "United States"})
+    assert "TERMS_FIRST_PERSON" not in _rules(v)
+
+
+def test_lowercase_us_pronoun_still_flagged():
+    bad = _mutate_terms(["(1) Contact us to claim, and we will assist you."])
+    v = check_compliance(bad, GOOD_CTX)
+    assert "TERMS_FIRST_PERSON" in _rules(v)
