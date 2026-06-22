@@ -231,6 +231,41 @@ def _fix_currency(data: dict, expected_symbol) -> dict:
     return data
 
 
+# Conservative, grammar-safe first-person rewrites. Order matters (specific first).
+# Anything not covered here is left for the live SOP-check warning layer.
+_FIRST_PERSON_SUBS = [
+    (re.compile(r"\bwe reserve the right\b", re.I), "Property Management reserves the right"),
+    (re.compile(r"\bwe accept no responsibility\b", re.I), "Property Management accepts no responsibility"),
+    (re.compile(r"\bwe are not liable\b", re.I), "Property Management is not liable"),
+    (re.compile(r"\bwe will\b", re.I), "Property Management will"),
+    (re.compile(r"\bwe may\b", re.I), "Property Management may"),
+    (re.compile(r"\bour terms and conditions\b", re.I), "Property Management's terms and conditions"),
+    (re.compile(r"\bour terms\b", re.I), "Property Management's terms"),
+    (re.compile(r"\bour discretion\b", re.I), "Property Management's discretion"),
+    (re.compile(r"\bour website\b", re.I), "the property website"),
+    (re.compile(r"\bour property\b", re.I), "the property"),
+]
+
+
+def _apply_first_person(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    for pat, repl in _FIRST_PERSON_SUBS:
+        text = pat.sub(repl, text)
+    return text
+
+
+def _fix_first_person(data: dict) -> dict:
+    """Best-effort deterministic removal of common first-person phrasing.
+    Residual first-person is caught by the live SOP-check warnings."""
+    for offer in data.get("offers", []) or []:
+        if isinstance(offer.get("body"), str):
+            offer["body"] = _apply_first_person(offer["body"])
+        if isinstance(offer.get("terms"), list):
+            offer["terms"] = [_apply_first_person(t) for t in offer["terms"]]
+    return data
+
+
 def _strip_dashes(data: dict) -> dict:
     """Apply dash cleaning across all generated text fields."""
     if isinstance(data.get("assessment"), str):
