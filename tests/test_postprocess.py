@@ -82,3 +82,36 @@ def test_generate_offer_propagates_bad_json(appmod, monkeypatch):
         assert False, "expected JSONDecodeError"
     except json.JSONDecodeError:
         pass  # the /generate route turns this into a clean 500
+
+
+def test_pipeline_runs_all_sanitizers(appmod):
+    data = {
+        "applicable": True,
+        "assessment": "ok",
+        "flags": ["none"],
+        "needs_kam_confirmation": False,
+        "detected_operator_names": ["Maple Living Group"],
+        "source_has_tncs": True,
+        "offers": [{
+            "properties": ["Maple Heights Residences, Toronto"],
+            "title": "Special Deal: Get US$750 CASHBACK — Today!",   # wrong currency + em dash
+            "body": "We will credit US$750 at Maple Heights Residences! Email x@y.com. Apply now!",
+            "terms": [
+                "1. We reserve the right to amend.",
+                "2. Credited by Maple Living Group after move-in.",
+                "3. Contact bookings@maple.ca for queries.",
+            ],
+        }],
+    }
+    out = appmod.postprocess(data, country="Canada")
+    o = out["offers"][0]
+    blob = json.dumps(out)
+    assert "—" not in blob                       # dash cleaned
+    assert "US$" not in o["title"] and "CA$750" in o["title"]   # currency fixed
+    assert "We will" not in o["body"]            # first person fixed
+    assert "x@y.com" not in o["body"]            # contact stripped
+    assert "Maple Living Group" not in " ".join(o["terms"])     # operator renamed
+    assert o["terms"] == [
+        "(1) Property Management reserves the right to amend.",
+        "(2) Credited by Property Management after move-in.",
+    ]                                            # contact-only term dropped + renumbered

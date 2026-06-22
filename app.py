@@ -20,7 +20,7 @@ import re
 
 from flask import Flask, jsonify, render_template, request
 
-from prompts import SYSTEM_PROMPT, build_user_prompt
+from prompts import SYSTEM_PROMPT, build_user_prompt, CURRENCY_MAP
 
 # Load .env if python-dotenv is available (optional convenience).
 try:
@@ -68,14 +68,25 @@ def generate_offer(country: str, property_name: str, raw_offer: str) -> dict:
     return postprocess(data)
 
 
-def postprocess(data: dict) -> dict:
+def postprocess(data: dict, country: str = "") -> dict:
     """Full deterministic post-processing pipeline applied to the model output.
 
     Order matters: normalise shape first so every downstream step can assume a
-    well-formed dict, then clean dashes, strip agent/commission terms (and
-    renumber), and finally annotate title lengths.
+    well-formed dict, then strip dashes, strip contact info, fix currency, fix
+    first person, drop agent/commission terms (and renumber), rename the operator,
+    and finally annotate title lengths.
     """
-    return _annotate(_rename_operator(_clean_agent_terms(_strip_dashes(_normalize(data)))))
+    data = _normalize(data)
+    expected_symbol = CURRENCY_MAP.get((country or "").strip())
+    detected = data.get("detected_operator_names", [])
+    data = _strip_dashes(data)
+    data = _strip_contact_info(data)
+    data = _fix_currency(data, expected_symbol)
+    data = _fix_first_person(data)
+    data = _clean_agent_terms(data)
+    data = _rename_operator(data, detected)
+    data = _annotate(data)
+    return data
 
 
 def _normalize(data: dict) -> dict:
