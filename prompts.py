@@ -237,6 +237,8 @@ Return ONLY a JSON object with this exact shape:
   "assessment": "1-3 sentence plain-English verdict on applicability",
   "flags": ["direct_booking_only" | "lucky_draw" | "refer_a_friend" | "low_rate" | "none", ...],
   "needs_kam_confirmation": true | false,
+  "source_has_tncs": true | false,
+  "detected_operator_names": ["the PMG / operator / landlord / management-company / brand name(s) you found, EXCLUDING the property's own identifying name", ...],
   "offers": [
     {{
       "properties": ["Property Name, City", ...],
@@ -252,6 +254,10 @@ JSON rules:
 - If applicable=false, "offers" may be empty; put the reason in "assessment".
 - "terms" entries are each already prefixed with their (n) number.
 - "flags" must contain "none" if there are no exclusion flags.
+- "source_has_tncs" is true if the source contained ANY Terms & Conditions block
+  (including an attached or transcribed screenshot), false if none were provided.
+- "detected_operator_names" lists the operator/PMG/brand names you replaced with
+  "Property Management" (e.g. "Maple Living Group", "FSL"). Empty list if none.
 - Output valid JSON only. No markdown, no commentary outside the JSON.
 - Remember: NO em dashes or en dashes anywhere in any field.
 """.strip()
@@ -347,11 +353,14 @@ name replaced by "Property Management", keeping the eligibility rules, the
 qualifying customer", "applied after check-in", non-transferable, governed by
 English law, etc. Do NOT use the generic list here.
 
-==================== EXAMPLE 3 — UK, short blurb, NO T&Cs provided ====================
+==================== EXAMPLE 3 — UK, short blurb + T&Cs in an attached screenshot ====================
 COUNTRY: United Kingdom (£)
 PROPERTY: Radford Mill, Nottingham
 SOURCE: "Book now and receive a £500 discount!" 51-week tenancy, 2026-2027
-academic year, all room types. Confirmed valid for international agents.
+academic year, all room types. A screenshot was attached containing the full
+Terms & Conditions (discount mechanics, eligibility, first-come basis, no
+semester lets, cancellation forfeits the discount, etc.). A private note
+confirmed the offer is valid for international agents.
 
 CORRECT OUTPUT:
 title: "Hot Deal Alert: Enjoy £500 Rent DISCOUNT Today!"
@@ -361,8 +370,15 @@ body:
 The discount will be applied to your total contract value once all booking requirements have been completed.
 
 Secure your room today and enjoy amazing savings on your student accommodation!"
-terms: use the 7 GENERIC T&Cs (none were provided).
-missing_info: ["offer validity end date not provided"]
+terms: T&Cs WERE provided (in the attached screenshot), so REWRITE them, one numbered
+term each, with the operator name replaced by "Property Management". Do NOT fall back to
+the generic list:
+(1) The £500 discount applies to all room types on a 51 week tenancy and will be applied to the total contract value upon completion of all booking requirements.
+(2) The offer applies only to bookings made for a 51-week tenancy in the 2026/27 academic year.
+(3) Availability is limited, and Property Management may remove or amend the promotion at any time.
+(4) The £500 discount will only apply once the tenancy agreement is signed, the tenant has moved in, and the first rent instalment has been paid. Rooms are available on a first come, first served basis. This offer is not available on semester lets.
+(5) The offer is valid on a limited number of bookings only and will be withdrawn once the maximum number of incentives has been reached. It cannot be combined with any other promotion. If the tenancy is cancelled, the discount is void and may be reversed. The offer is not transferable.
+(6) Property Management reserves the right to amend these terms and conditions at any time.
 
 ==================== EXAMPLE 4 — US, three website-banner offers, NO T&Cs ====================
 COUNTRY: United States (US$)

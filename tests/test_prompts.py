@@ -71,3 +71,21 @@ def test_build_user_prompt_includes_inputs_and_fewshot(prompts):
 def test_build_user_prompt_handles_none_property(prompts):
     p = prompts.build_user_prompt("Australia", None, "offer")
     assert "not specified" in p
+
+
+def test_example3_rewrites_provided_tncs_not_generic(prompts):
+    fs = prompts.FEW_SHOT_EXAMPLES
+    # Example 3 (Radford Mill) had T&Cs in a screenshot -> must show rewritten terms,
+    # NOT instruct "use the 7 generic T&Cs".
+    start = fs.index("EXAMPLE 3")
+    end = fs.index("EXAMPLE 4")
+    block = fs[start:end]
+    assert "use the 7 GENERIC T&Cs" not in block
+    assert "51 week tenancy" in block or "51-week" in block
+    assert "Property Management reserves the right" in block
+
+
+def test_output_contract_has_new_fields(prompts):
+    sp = prompts.SYSTEM_PROMPT
+    assert '"detected_operator_names"' in sp
+    assert '"source_has_tncs"' in sp
