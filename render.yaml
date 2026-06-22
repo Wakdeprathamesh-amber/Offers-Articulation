@@ -6,7 +6,9 @@ services:
     runtime: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT"
+    # --timeout 120: gunicorn's default worker timeout is 30s, which would kill a
+    # slow gpt-5.5 generation. Keep it above OPENAI_TIMEOUT (60s).
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
     envVars:
       - key: OPENAI_API_KEY
         sync: false          # set this securely in the Render dashboard, never in code
