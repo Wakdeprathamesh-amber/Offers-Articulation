@@ -60,3 +60,21 @@ def test_date_range_not_treated_as_phone(appmod):
         {"offers": [{"body": "Valid 15/06/2026 to 10/08/2026.", "terms": []}]}
     )
     assert "15/06/2026" in out["offers"][0]["body"]
+
+
+def test_dangling_contact_clause_trimmed(appmod):
+    out = appmod._strip_contact_info(
+        {"offers": [{"body": "", "terms": [
+            "(1) The cashback is credited after move-in; queries to leasing@pmg.com."
+        ]}]}
+    )
+    t = out["offers"][0]["terms"][0]
+    assert "queries" not in t.lower()
+    assert "credited after move-in" in t
+
+
+def test_legit_call_word_without_contact_token_kept(appmod):
+    # No email/phone token -> trailing cleanup must NOT fire and strip 'call'.
+    term = "(1) You may need to call."
+    out = appmod._strip_contact_info({"offers": [{"body": "", "terms": [term]}]})
+    assert out["offers"][0]["terms"][0] == term

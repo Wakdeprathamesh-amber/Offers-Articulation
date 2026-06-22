@@ -200,8 +200,19 @@ _CONTACT_LEADINS = (
 )
 
 
-def _scrub_contact_text(text: str) -> str:
-    """Remove email/URL/phone tokens from a string and tidy the leftover artefacts."""
+# Trailing contact lead-in left dangling after a token is removed
+# (e.g. "...; queries to" once the email is gone). Anchored at the end of string.
+_TRAILING_CONTACT_RE = re.compile(
+    r"[\s;,.\-]*\b(?:contact|email|e-mail|call|phone|tel|queries|enquiries|inquiries|questions)\b"
+    r"(?:\s+(?:us|to|at|on|out|via))*\s*[.:]?\s*$",
+    re.I,
+)
+
+
+def _scrub_contact_text(text: str, trim_trailing: bool = False) -> str:
+    """Remove email/URL/phone tokens from a string and tidy the leftover artefacts.
+    When trim_trailing is set (only when a contact token was actually present),
+    also drop a dangling trailing contact lead-in like '; queries to'."""
     if not isinstance(text, str):
         return text
     text = _EMAIL_RE.sub("", text)
@@ -210,6 +221,8 @@ def _scrub_contact_text(text: str) -> str:
     text = re.sub(r"\(\s*\)", "", text)            # empty parens left behind
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)   # space before punctuation
     text = re.sub(r"\s{2,}", " ", text)
+    if trim_trailing:
+        text = _TRAILING_CONTACT_RE.sub("", text)
     return text.strip()
 
 
@@ -218,7 +231,11 @@ def _strip_contact_info(data: dict) -> dict:
     only a contact instruction; keep and scrub a term with embedded contact info."""
     for offer in data.get("offers", []) or []:
         if isinstance(offer.get("body"), str):
-            offer["body"] = _scrub_contact_text(offer["body"])
+            body_text = offer["body"]
+            body_had_contact = bool(
+                _EMAIL_RE.search(body_text) or _URL_RE.search(body_text) or _PHONE_RE.search(body_text)
+            )
+            offer["body"] = _scrub_contact_text(body_text, trim_trailing=body_had_contact)
         terms = offer.get("terms")
         if not isinstance(terms, list):
             continue
@@ -228,7 +245,7 @@ def _strip_contact_info(data: dict) -> dict:
             had_contact = bool(
                 _EMAIL_RE.search(body) or _URL_RE.search(body) or _PHONE_RE.search(body)
             )
-            scrubbed = _scrub_contact_text(body)
+            scrubbed = _scrub_contact_text(body, trim_trailing=had_contact)
             if not re.sub(r"[^A-Za-z0-9]", "", scrubbed):
                 continue  # nothing substantive remains
             low = scrubbed.lower()
