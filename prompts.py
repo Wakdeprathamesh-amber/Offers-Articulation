@@ -81,6 +81,18 @@ GOLDEN RULES
   reward tiers (e.g. different reward for half-year vs full-year), booking caps
   ("first 20 bookings"), and date windows. The richest details often sit inside
   the provided T&Cs, not the headline blurb.
+- KEEP THE OFFER AND THE T&Cs SEPARATE. Build the Offer Title and Offer Body
+  ONLY from the promotional offer content. Build the Terms & Conditions ONLY
+  from the source's Terms & Conditions. NEVER move T&C clauses into the body,
+  and NEVER move offer/marketing copy into the T&Cs. Do not mix them.
+- NEVER print a brand name. The offer is shown on the property's OWN page on
+  amber, so the reader already knows which property it is. Do NOT write the
+  specific property's brand name or the operator/PMG/landlord company name
+  ANYWHERE in the title, body, or T&Cs. Refer to the accommodation generically
+  as "this property" (in the body) or "the property" (in the T&Cs), and refer to
+  the managing company as "Property Management". Keep the offer's meaning exactly
+  the same. CORRECT: "Book an eligible room at this property and enjoy ...".
+  WRONG: "Book a room at UniLodge Melbourne Central ...".
 - NEVER use em dashes (—) or en dashes (–) ANYWHERE in the output. Write
   naturally: use commas, full stops, or the word "to" for ranges
   (e.g. "June 15 to July 31, 2026"). This keeps copy human and on-brand.
@@ -170,7 +182,9 @@ Match the depth and structure of the human examples shown later.
   full-year, or a list of perks), present them as a short bulleted list using
   the "•" character, one per line. Otherwise keep it in flowing paragraphs.
 - Every detail in the body MUST match the title.
-- Mention the property name where a single property is given.
+- Do NOT name the property or the operator. Refer to the accommodation as
+  "this property" (e.g. "Book an eligible room at this property and enjoy ...").
+  The offer already sits on that property's page, so the brand name is not needed.
 - END with a short, natural call to action on its own line
   (e.g. "Apply now!" or "Book now to claim this limited-time offer!").
 - Keep it brief and human. Do not pad. Do not add anything not in the source.
@@ -186,22 +200,25 @@ STEP 3 — TERMS & CONDITIONS
 - For US properties: generic T&Cs are typically used; still capture any
   floorplan-specific term mentioned in the source.
 - Numbering: (1), (2), (3)... NEVER bullet points in the T&Cs.
-- Replace the PMG / operator / landlord / management-company / brand name in
-  conditions with "Property Management". This applies to ANY such name, even one
-  you have never seen before, not just the examples. The operator name is the
-  company that owns or runs the property or that sent the offer. It often looks
-  like a company name ending in or containing words such as Group, Living,
-  Management, Properties, Residences, Partnerships, Estates, Student, PBSA, Ltd,
-  LLC, Inc, or similar (e.g. "UniLodge", "FSL", "Maple Living Group",
-  "Cardinal Group", "Student Roost"). Whenever such a name appears in a term as
-  the party doing something (reserving rights, crediting, amending, being not
-  liable, "as per X's terms", "any other X property"), replace it with
-  "Property Management".
-  EXCEPTION: keep the actual PROPERTY name where it merely identifies the
-  property (e.g. "a new eligible resident at UniLodge Melbourne Central" stays),
-  but "any other UniLodge property" becomes "any other Property Management
-  property", and "Maple Living Group reserves the right" becomes "Property
-  Management reserves the right".
+- Remove ALL brand names from the T&Cs, in two ways:
+  (a) The operator / PMG / landlord / management-company name becomes
+      "Property Management". This applies to ANY such name, even one you have
+      never seen before. It often looks like a company name ending in or
+      containing words such as Group, Living, Management, Properties, Residences,
+      Partnerships, Estates, Student, PBSA, Ltd, LLC, Inc (e.g. "UniLodge",
+      "FSL", "Maple Living Group", "Cardinal Group", "Student Roost"). Whenever
+      such a name appears as the party doing something (reserving rights,
+      crediting, amending, being not liable, "as per X's terms", "any other X
+      property"), replace it with "Property Management". So "any other UniLodge
+      property" becomes "any other Property Management property", and
+      "Maple Living Group reserves the right" becomes "Property Management
+      reserves the right".
+  (b) The specific PROPERTY name becomes "the property" (NOT a brand). So
+      "a new eligible resident at UniLodge Melbourne Central" becomes "a new
+      eligible resident at the property", and "only valid at UniLodge Melbourne
+      Central" becomes "only valid at the property". Do NOT keep the property's
+      brand name even where it merely identifies the property: the offer already
+      sits on that property's page on amber.
 - NEVER use first-person words (we, us, our). Rephrase any such line.
 - Remove anything revealing property-management details: email addresses,
   phone numbers, internal contacts, mailing addresses, copyright lines.
@@ -304,7 +321,7 @@ Eligible residents will receive:
 
 Apply now!"
 terms:
-(1) You must be classified as a new eligible resident at UniLodge Melbourne Central to qualify for this offer.
+(1) You must be classified as a new eligible resident at the property to qualify for this offer.
 (2) The offer is valid for new applications and bookings received during the promotional period.
 (3) The offer is valid for Studio Standard, Studio Premium and Studio Long room types only.
 (4) The offer is limited to eligible, confirmed bookings received between 15/6/2026 until 31/7/2026 or until the 20 booking allocation is exhausted, whichever occurs first.
@@ -318,7 +335,7 @@ terms:
 (12) If a resident terminates their lease early, transfers rooms, or otherwise fails to complete the original lease term, any rent credits associated with this promotion will be forfeited.
 (13) All new bookings must pay the required 2-week deposit to secure their booking, as outlined in the Letter of Offer, by the date specified in the offer. Failure to pay the deposit by the specified due date will result in the booking being deemed ineligible for this promotion.
 (14) This offer cannot be transferred, exchanged for cash, refunded, or redeemed for any other benefit.
-(15) This offer is only valid at UniLodge Melbourne Central and is not available at any other Property Management property.
+(15) This offer is only valid at the property and is not available at any other Property Management property.
 (16) Property Management reserves the right to amend, withdraw, or extend this promotion at any time without notice.
 (17) These terms and conditions and pricing are correct as at 11/6/2026.
 NOTE: the source's offer T&Cs also had a clause "The offer is available for
@@ -326,9 +343,10 @@ bookings made directly through the UniLodge website and for bookings submitted
 via the agent booking portal by education agents, booking agents, or referral
 agents." That clause was DELETED (that is why 18 source terms became 17). The
 separate agent-commission block, the partnerships email and the mailing address
-were also REMOVED. "UniLodge" was swapped to "Property Management" in the
-reserves-rights and "any other ... property" lines, but kept where it names the
-actual property.
+were also REMOVED. The operator name "UniLodge" was swapped to "Property
+Management" in the reserves-rights and "any other ... property" lines, and the
+specific property name "UniLodge Melbourne Central" was generalised to "the
+property" everywhere it appeared (terms 1 and 15), so NO brand name remains.
 
 ==================== EXAMPLE 2 — UK, first-200 discount + provided T&Cs ====================
 COUNTRY: United Kingdom (£)
@@ -348,10 +366,13 @@ This offer is available on all room types and tenancy lengths for eligible booki
 
 With only 200 discounts available, book early to secure your room and enjoy £250 OFF your tenancy!"
 terms: rewrite ALL the provided UK T&Cs as (1), (2), (3)... with the operator
-name replaced by "Property Management", keeping the eligibility rules, the
-200-discount cap, the 20 October 2026 check-in requirement, "one discount per
-qualifying customer", "applied after check-in", non-transferable, governed by
-English law, etc. Do NOT use the generic list here.
+name replaced by "Property Management" AND the specific property names
+(Buchannan View, Mannequin House, Newcastle 1, St. James House) generalised to
+"the property" (or "a participating property" where the source listed several),
+so NO brand name remains. Keep the eligibility rules, the 200-discount cap, the
+20 October 2026 check-in requirement, "one discount per qualifying customer",
+"applied after check-in", non-transferable, governed by English law, etc. Do NOT
+use the generic list here.
 
 ==================== EXAMPLE 3 — UK, short blurb + T&Cs in an attached screenshot ====================
 COUNTRY: United Kingdom (£)
