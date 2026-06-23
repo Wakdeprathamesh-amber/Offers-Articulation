@@ -52,8 +52,14 @@ publishing** panel so the reviewer can correct it before copying.
 
 ## Notes / limits (v1)
 
-- **Text only.** Image / screenshot offers must be copied out and pasted — a
-  scanned PDF with no text layer will warn you. (Vision support is a v2 item.)
+- **PDF, screenshots and images supported.** Text-based PDFs are read directly.
+  Scanned/screenshot PDFs and image uploads (PNG/JPG/WEBP) are read with the
+  model's vision (`gpt-5.5`) when `OPENAI_API_KEY` is set; the transcribed text is
+  appended to the box for you to review before generating. With no key set, a
+  scanned file warns you to paste the text manually.
+- **All output copy is brand-generic.** The specific property name and the
+  operator/PMG company name are replaced with "the property" / "Property
+  Management" so amber does not advertise the operator's branding.
 - Model defaults to `gpt-4o` in code; production (Render) is set to `gpt-5.5` for
   best articulation. Override with `OPENAI_MODEL`. The OpenAI call is model-agnostic
   (it drops `temperature` automatically for models that reject a custom value, e.g.

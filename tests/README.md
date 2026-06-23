@@ -52,7 +52,10 @@ plumbing tests cannot. Always run it before shipping a prompt change.
 | `test_strip_contact.py` | Contact-info removal | emails/URLs/phones stripped from body+terms; contact-only term dropped + renumbered; embedded contact scrubbed but term kept; dangling "queries to" trimmed; date ranges not mistaken for phones; idempotent |
 | `test_fix_currency.py` | Currency normalisation | wrong symbol swapped to expected; `US$` not confused with `S$`; correct symbol untouched; unknown country no-op; multiple symbols normalised |
 | `test_fix_first_person.py` | First-person rewrites | common "we/our" patterns → "Property Management"; idempotent; plain text untouched |
-| `test_live_gate.py` | Live SOP warnings | clean output has no error warnings; residual first-person flagged; never crashes on odd output |
+| `test_live_gate.py` | Live SOP warnings | clean output has no error warnings; residual first-person flagged; operator-in-property-name not false-flagged; never crashes on odd output |
+| `test_generalise.py` | Brand generalisation | property name replaced with "the property" (full + core); no double "the"; empty no-op; runs in postprocess |
+| `test_model_compat.py` | Model compatibility | falls back without temperature on gpt-5/5.5; non-temperature errors still raise |
+| `test_vision.py` | Vision/OCR extraction (mocked) | image PDF + image upload use vision; text PDF skips vision; no-key warns; unsupported ext rejected; empty vision warns |
 | `test_normalize.py` | Output-shape contract | missing keys, non-dict input, string→list coercion for flags/properties/terms/missing_info, bad offer entries skipped |
 | `test_annotate.py` | Title length status | 60 target / 72 hard cap boundaries, missing/None title, unicode currency char count |
 | `test_postprocess.py` | Full pipeline + `generate_offer` (mocked OpenAI) | combined clean+normalize+renumber, idempotency, bad-JSON propagation |

@@ -117,10 +117,10 @@
         <textarea id="offer" placeholder="Paste the offer exactly as it appears in the Freshdesk ticket / property email / website banner…"></textarea>
 
         <div class="filebar">
-          <input type="file" id="pdf" accept="application/pdf" />
-          <button class="ghost" id="extractBtn" type="button">Extract from PDF</button>
+          <input type="file" id="pdf" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*" />
+          <button class="ghost" id="extractBtn" type="button">Extract from PDF / Image</button>
         </div>
-        <div class="hint">PDF must have selectable text (not a scan/screenshot). Extracted text is appended to the box above for you to review.</div>
+        <div class="hint">Upload a PDF or a screenshot/image of the offer. Text PDFs are read directly; scans, screenshots and images are read by AI. Extracted text is appended above for you to review and edit before generating.</div>
 
         <button id="generateBtn" type="button">Generate offer content</button>
       </div>
@@ -179,7 +179,7 @@
 
     $("extractBtn").addEventListener("click", async () => {
       const file = $("pdf").files[0];
-      if (!file) { alert("Choose a PDF first."); return; }
+      if (!file) { alert("Choose a PDF or image first."); return; }
       const btn = $("extractBtn");
       btn.disabled = true; btn.textContent = "Extracting…";
       try {
@@ -192,9 +192,12 @@
         else if (data.text) {
           const box = $("offer");
           box.value = (box.value ? box.value + "\n\n" : "") + data.text;
+          if (data.source === "vision") {
+            alert("This file was read by AI. Please check the extracted text for accuracy before generating.");
+          }
         }
       } catch (e) { alert("Extraction failed: " + e); }
-      finally { btn.disabled = false; btn.textContent = "Extract from PDF"; }
+      finally { btn.disabled = false; btn.textContent = "Extract from PDF / Image"; }
     });
 
     $("generateBtn").addEventListener("click", async () => {

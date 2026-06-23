@@ -14,6 +14,7 @@ file) before running:
 Then open http://127.0.0.1:5000
 """
 
+import io
 import json
 import os
 import re
@@ -64,41 +65,83 @@ def extract_pdf_text(file_storage) -> str:
     return "\n".join(chunks).strip()
 
 
-def generate_offer(country: str, property_name: str, raw_offer: str) -> dict:
-    """Call the OpenAI API and return the parsed, post-processed, SOP-checked result."""
+def _chat_completion(messages, json_mode: bool = False):
+    """Shared OpenAI chat call. Sends the configured temperature, and if the model
+    rejects a custom temperature (gpt-5/gpt-5.5), retries without it once and
+    remembers that for the session."""
     from openai import OpenAI
 
     global _SEND_TEMPERATURE
     client = OpenAI(timeout=OPENAI_TIMEOUT, max_retries=2)  # reads OPENAI_API_KEY from env
-    user_prompt = build_user_prompt(country, property_name, raw_offer)
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt},
-    ]
 
     def _create(send_temperature: bool):
-        kwargs = {
-            "model": MODEL,
-            "response_format": {"type": "json_object"},
-            "messages": messages,
-        }
+        kwargs = {"model": MODEL, "messages": messages}
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
         if send_temperature:
             kwargs["temperature"] = TEMPERATURE
         return client.chat.completions.create(**kwargs)
 
     try:
-        response = _create(_SEND_TEMPERATURE)
+        return _create(_SEND_TEMPERATURE)
     except Exception as exc:
-        # Models like gpt-5/gpt-5.5 reject a custom temperature; retry without it.
         if _SEND_TEMPERATURE and "temperature" in str(exc).lower():
             _SEND_TEMPERATURE = False
-            response = _create(False)
-        else:
-            raise
+            return _create(False)
+        raise
+
+
+def generate_offer(country: str, property_name: str, raw_offer: str) -> dict:
+    """Call the OpenAI API and return the parsed, post-processed, SOP-checked result."""
+    user_prompt = build_user_prompt(country, property_name, raw_offer)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+    response = _chat_completion(messages, json_mode=True)
     data = json.loads(response.choices[0].message.content)
     result = postprocess(data, country=country, property_name=property_name)
     result["warnings"] = _compliance_warnings(result, country, property_name)
     return result
+
+
+# ---- Vision OCR for image / scanned PDFs -----------------------------------
+VISION_PROMPT = (
+    "You are reading a promotional student-accommodation offer (and possibly its "
+    "Terms & Conditions) from an image or screenshot. Transcribe ALL the visible "
+    "text VERBATIM, preserving the offer details and the full Terms & Conditions "
+    "if present. Keep the original wording. Do not summarise, do not translate, do "
+    "not add anything. Output plain text only."
+)
+
+_IMAGE_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+
+
+def _pdf_to_images(pdf_bytes: bytes, max_pages: int = 10, zoom: float = 2.0) -> list:
+    """Render the first max_pages of a PDF to PNG image bytes (for scanned PDFs)."""
+    import fitz  # pymupdf
+
+    images = []
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        for page in list(doc)[:max_pages]:
+            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+            images.append(pix.tobytes("png"))
+    finally:
+        doc.close()
+    return images
+
+
+def extract_with_vision(images: list, mime: str = "image/png") -> str:
+    """Send page/screenshot images to the model and return the transcribed text."""
+    import base64
+
+    content = [{"type": "text", "text": VISION_PROMPT}]
+    for img in images:
+        b64 = base64.b64encode(img).decode()
+        content.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
+    response = _chat_completion([{"role": "user", "content": content}])
+    return (response.choices[0].message.content or "").strip()
 
 
 def _compliance_warnings(result: dict, country: str, property_name: str = "") -> list:
@@ -525,32 +568,64 @@ def index():
     return render_template("index.html")
 
 
+_ALLOWED_UPLOAD_EXTS = (".pdf", ".png", ".jpg", ".jpeg", ".webp")
+
+
 @app.route("/extract-pdf", methods=["POST"])
 def extract_pdf():
-    """Extract text from an uploaded PDF for the user to review before generating."""
+    """Extract text from an uploaded PDF or image for the user to review before
+    generating. Text-based PDFs are read directly; scanned/screenshot PDFs and
+    image uploads are read with the model's vision (when an API key is set)."""
     if "pdf" not in request.files:
         return jsonify({"error": "No PDF uploaded."}), 400
     f = request.files["pdf"]
     filename = (f.filename or "").lower()
-    if not filename.endswith(".pdf"):
-        return jsonify({"error": "Please upload a .pdf file."}), 400
-    try:
-        text = extract_pdf_text(f)
-    except Exception:
-        app.logger.exception("pdf extraction failed")
-        return jsonify({"error": "Could not read PDF. Please ensure it is a valid PDF file."}), 400
-    if not text:
+    if not filename.endswith(_ALLOWED_UPLOAD_EXTS):
+        return jsonify({"error": "Please upload a .pdf, .png, .jpg or .webp file."}), 400
+
+    data = f.read()
+    is_pdf = filename.endswith(".pdf")
+
+    # 1) Text-based PDF: use the real text layer, no AI needed.
+    if is_pdf:
+        try:
+            text = extract_pdf_text(io.BytesIO(data))
+        except Exception:
+            app.logger.exception("pdf extraction failed")
+            return jsonify({"error": "Could not read PDF. Please ensure it is a valid PDF file."}), 400
+        if text:
+            return jsonify({"text": text, "source": "text"})
+
+    # 2) Scanned/screenshot PDF or image upload: read with vision (needs a key).
+    if not os.environ.get("OPENAI_API_KEY"):
         return jsonify(
             {
                 "text": "",
                 "warning": (
-                    "This PDF has no selectable text (it looks like a scan or "
-                    "screenshot). v1 is text-only, so please copy the offer text "
-                    "and paste it in the box above."
+                    "This file has no selectable text (it looks like a scan or "
+                    "screenshot) and AI reading is unavailable because OPENAI_API_KEY "
+                    "is not set. Please copy the offer text and paste it in the box above."
                 ),
             }
         )
-    return jsonify({"text": text})
+    try:
+        if is_pdf:
+            images = _pdf_to_images(data)
+            mime = "image/png"
+        else:
+            ext = filename[filename.rfind("."):]
+            images = [data]
+            mime = _IMAGE_MIME.get(ext, "image/png")
+        vision_text = extract_with_vision(images, mime=mime)
+    except Exception:
+        app.logger.exception("vision extraction failed")
+        return jsonify({"error": "Could not read the file with AI. Please paste the text manually."}), 400
+
+    if not vision_text:
+        return jsonify(
+            {"text": "", "warning": "No text could be read from this file. Please paste the offer text manually."}
+        )
+    return jsonify({"text": vision_text, "source": "vision"})
 
 
 @app.route("/generate", methods=["POST"])

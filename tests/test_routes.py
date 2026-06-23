@@ -93,8 +93,10 @@ def test_extract_pdf_wrong_extension(client):
     assert ".pdf" in r.get_json()["error"]
 
 
-def test_extract_pdf_image_based_real_file_warns(client):
-    """The real example PDFs are screenshots (no text layer) -> warning."""
+def test_extract_pdf_image_based_real_file_warns(client, monkeypatch):
+    """The real example PDFs are screenshots (no text layer). With no API key the
+    vision path is unavailable, so we warn and ask the user to paste."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     path = os.path.join(root, "UK offer.pdf")
     if not os.path.exists(path):
