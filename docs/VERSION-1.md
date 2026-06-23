@@ -49,6 +49,9 @@ Raw offer (text / PDF / screenshot)
 | **⚠ Review warnings** | Anything the auto-cleaner can't safely fix (e.g. unusual first-person) is flagged in a per-offer "Review before publishing" panel. |
 | **Input: PDF / image / vision** | Text PDFs read directly; scanned/screenshot PDFs and image uploads (PNG/JPG/WEBP) are read by `gpt-5.5` vision and transcribed into the box for review. |
 | **Multiple offers** | One source can produce several offers (different properties/promos), each with a varied title. |
+| **Separate offer / T&C inputs** | Two boxes: the offer text and (optional) the Terms & Conditions, so each is captured and processed separately. |
+| **Run history (PostgreSQL)** | Every generation is logged: time, country, property, model, input offer, input T&Cs, output offer, output T&Cs, full JSON. |
+| **User rating + comment** | After generating, the user can give a 1–5 star rating and a comment; saved against that run for quality tracking. |
 
 ---
 
@@ -101,9 +104,27 @@ Raw offer (text / PDF / screenshot)
 
 ---
 
-## 8. Roadmap / next
+## 8. Run-logging schema (PostgreSQL)
 
-- **In progress:** PostgreSQL run-logging (input, output, model, timestamp) for history
-  and analytics. Wires to a `DATABASE_URL` env var.
-- **Candidate:** generate directly from an image (skip the transcription step);
-  per-property analytics; auth on the public URL; "already live on amber" pre-check.
+Table `offer_articulation_runs` (auto-created on startup if missing):
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | bigserial | primary key |
+| created_at | timestamptz | time log (default now) |
+| country, property_name, model | text | run context |
+| input_offer, input_tnc | text | the two input boxes |
+| output_offer, output_tnc | text | generated copy + T&Cs |
+| output_json | jsonb | full structured result |
+| rating | smallint | 1–5 from the user |
+| comment | text | user comment/suggestion |
+
+Configured via env vars `WAKDE_DB_HOST / _PORT / _NAME / _USER / _PASSWORD`
+(set in Render dashboard). Logging is **best-effort** — if the DB is unavailable,
+generation still works; the run just isn't logged.
+
+## 9. Roadmap / next
+
+- Analytics dashboard over `offer_articulation_runs` (avg rating, common issues).
+- Generate directly from an image (skip the transcription step).
+- Auth / rate-limiting on the public URL; "already live on amber" pre-check.

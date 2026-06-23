@@ -31,8 +31,17 @@ try:
 except Exception:
     pass
 
+import db  # PostgreSQL run-logging (best-effort; no-ops if not configured)
+
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB upload cap
+
+# Best-effort: ensure the runs table exists. Never blocks startup.
+try:
+    if db.is_enabled():
+        db.init_db()
+except Exception:
+    pass
 
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 TEMPERATURE = float(os.environ.get("OPENAI_TEMPERATURE", "0.3"))
@@ -91,9 +100,9 @@ def _chat_completion(messages, json_mode: bool = False):
         raise
 
 
-def generate_offer(country: str, property_name: str, raw_offer: str) -> dict:
+def generate_offer(country: str, property_name: str, raw_offer: str, raw_tnc: str = "") -> dict:
     """Call the OpenAI API and return the parsed, post-processed, SOP-checked result."""
-    user_prompt = build_user_prompt(country, property_name, raw_offer)
+    user_prompt = build_user_prompt(country, property_name, raw_offer, raw_tnc)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
@@ -628,16 +637,31 @@ def extract_pdf():
     return jsonify({"text": vision_text, "source": "vision"})
 
 
+def _output_strings(result: dict):
+    """Flatten the structured result into plain output_offer / output_tnc text for logging."""
+    offers = result.get("offers") or []
+    offer_parts, tnc_parts = [], []
+    for o in offers:
+        title = (o.get("title") or "").strip()
+        body = (o.get("body") or "").strip()
+        offer_parts.append((title + "\n\n" + body).strip())
+        terms = o.get("terms") or []
+        if terms:
+            tnc_parts.append("\n".join(terms))
+    return "\n\n---\n\n".join(p for p in offer_parts if p), "\n\n---\n\n".join(tnc_parts)
+
+
 @app.route("/generate", methods=["POST"])
 def generate():
     payload = request.get_json(force=True, silent=True) or {}
     raw_offer = (payload.get("raw_offer") or "").strip()
+    raw_tnc = (payload.get("raw_tnc") or "").strip()
     country = (payload.get("country") or "").strip()
     property_name = (payload.get("property_name") or "").strip()
 
     if not raw_offer:
         return jsonify({"error": "Please provide the raw offer text."}), 400
-    if len(raw_offer) > MAX_RAW_OFFER_CHARS:
+    if len(raw_offer) + len(raw_tnc) > MAX_RAW_OFFER_CHARS:
         return jsonify(
             {"error": f"Offer text is too long (max {MAX_RAW_OFFER_CHARS} characters)."}
         ), 400
@@ -647,12 +671,51 @@ def generate():
         ), 400
 
     try:
-        result = generate_offer(country, property_name, raw_offer)
+        result = generate_offer(country, property_name, raw_offer, raw_tnc)
     except Exception:
         app.logger.exception("generation failed")
         return jsonify({"error": "Generation failed. Please try again."}), 500
 
+    # Best-effort run logging; never blocks the response.
+    output_offer, output_tnc = _output_strings(result)
+    run_id = db.log_run(country, property_name, MODEL, raw_offer, raw_tnc,
+                        output_offer, output_tnc, result)
+    if run_id is not None:
+        result["run_id"] = run_id
+
     return jsonify(result)
+
+
+@app.route("/feedback", methods=["POST"])
+def feedback():
+    """Attach a rating (1-5) and/or comment to a previously logged run."""
+    payload = request.get_json(force=True, silent=True) or {}
+    run_id = payload.get("run_id")
+    rating = payload.get("rating")
+    comment = (payload.get("comment") or "").strip() or None
+
+    if run_id is None:
+        return jsonify({"error": "run_id is required."}), 400
+    try:
+        run_id = int(run_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "run_id must be an integer."}), 400
+
+    if rating is not None:
+        try:
+            rating = int(rating)
+        except (TypeError, ValueError):
+            return jsonify({"error": "rating must be an integer 1-5."}), 400
+        if not (1 <= rating <= 5):
+            return jsonify({"error": "rating must be between 1 and 5."}), 400
+
+    if rating is None and comment is None:
+        return jsonify({"error": "Provide a rating and/or a comment."}), 400
+
+    ok = db.save_feedback(run_id, rating, comment)
+    if not ok:
+        return jsonify({"error": "Could not save feedback."}), 500
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

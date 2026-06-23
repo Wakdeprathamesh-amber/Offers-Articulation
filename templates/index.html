@@ -84,6 +84,12 @@
     .review { background: #fff7e6; border: 1px solid #f5d68a; color: var(--warn); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
     .review strong { display: block; margin-bottom: 4px; }
     .review ul { margin: 0; padding-left: 18px; }
+    .feedback { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 16px; }
+    .feedback .stars { font-size: 26px; color: var(--amber); cursor: pointer; margin: 4px 0 10px; user-select: none; }
+    .feedback .star { padding: 0 2px; }
+    .feedback textarea { min-height: 70px; }
+    .feedback #fbSubmit { margin-top: 8px; }
+    .feedback #fbMsg { margin-left: 10px; }
     .terms { padding-left: 0; list-style: none; margin: 6px 0 0; }
     .terms li { font-size: 13px; margin-bottom: 5px; }
     .placeholder { color: var(--muted); font-size: 14px; text-align: center; padding: 40px 10px; }
@@ -115,6 +121,9 @@
 
         <label for="offer">Raw offer text</label>
         <textarea id="offer" placeholder="Paste the offer exactly as it appears in the Freshdesk ticket / property email / website banner…"></textarea>
+
+        <label for="tnc">Terms &amp; Conditions <span style="font-weight:400;color:var(--muted)">(optional, paste separately if you have them)</span></label>
+        <textarea id="tnc" style="min-height:120px" placeholder="Paste the offer's Terms &amp; Conditions here if they are separate. Leave blank if the T&Cs are already inside the offer text above (or if none were provided)."></textarea>
 
         <div class="filebar">
           <input type="file" id="pdf" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*" />
@@ -213,6 +222,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             raw_offer,
+            raw_tnc: $("tnc").value,
             country: $("country").value,
             property_name: $("property").value,
           }),
@@ -281,8 +291,47 @@
         }
         html += `</div>`;
       });
+
+      // Feedback widget (only when the run was logged to the DB).
+      if (data.run_id) {
+        html += `<div class="feedback" data-run="${data.run_id}">
+          <div class="flabel"><span>Rate this result</span></div>
+          <div class="stars" id="stars">${[1,2,3,4,5].map((n)=>`<span class="star" data-v="${n}">☆</span>`).join("")}</div>
+          <textarea id="fbComment" placeholder="Optional: what was wrong or could be better?"></textarea>
+          <button class="ghost" id="fbSubmit" type="button">Submit feedback</button>
+          <span id="fbMsg" class="hint"></span>
+        </div>`;
+      }
+
       out.innerHTML = html;
       attachCopyHandlers();
+      attachFeedbackHandlers();
+    }
+
+    let _rating = 0;
+    function attachFeedbackHandlers() {
+      const wrap = document.querySelector(".feedback");
+      if (!wrap) return;
+      _rating = 0;
+      const runId = wrap.dataset.run;
+      const stars = wrap.querySelectorAll(".star");
+      stars.forEach((s) => s.addEventListener("click", () => {
+        _rating = parseInt(s.dataset.v, 10);
+        stars.forEach((x) => x.textContent = parseInt(x.dataset.v, 10) <= _rating ? "★" : "☆");
+      }));
+      wrap.querySelector("#fbSubmit").addEventListener("click", async () => {
+        const comment = wrap.querySelector("#fbComment").value.trim();
+        const msg = wrap.querySelector("#fbMsg");
+        if (!_rating && !comment) { msg.textContent = "Pick a rating or write a comment first."; return; }
+        try {
+          const res = await fetch("/feedback", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ run_id: parseInt(runId, 10), rating: _rating || null, comment }),
+          });
+          const data = await res.json();
+          msg.textContent = data.ok ? "Thanks! Feedback saved." : ("Could not save: " + (data.error || ""));
+        } catch (e) { msg.textContent = "Could not save feedback."; }
+      });
     }
 
     function reviewBlock(warnings) {

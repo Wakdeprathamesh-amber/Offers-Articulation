@@ -60,6 +60,10 @@ publishing** panel so the reviewer can correct it before copying.
 - **All output copy is brand-generic.** The specific property name and the
   operator/PMG company name are replaced with "the property" / "Property
   Management" so amber does not advertise the operator's branding.
+- **Run-logging (optional).** Set `WAKDE_DB_HOST / _PORT / _NAME / _USER /
+  _PASSWORD` (PostgreSQL) to log each run (inputs, outputs, model, timestamp) to
+  `offer_articulation_runs` and capture the user's 1-5 rating + comment. If unset,
+  logging is silently skipped and generation works normally.
 - Model defaults to `gpt-4o` in code; production (Render) is set to `gpt-5.5` for
   best articulation. Override with `OPENAI_MODEL`. The OpenAI call is model-agnostic
   (it drops `temperature` automatically for models that reject a custom value, e.g.

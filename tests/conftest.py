@@ -10,6 +10,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+# Neutralise the database for the offline test suite BEFORE importing app: blank
+# the WAKDE_DB_* vars so db.is_enabled() is False and no test ever connects to or
+# writes to the real database. load_dotenv(override=False) will not overwrite these.
+for _k in ("WAKDE_DB_HOST", "WAKDE_DB_PORT", "WAKDE_DB_NAME", "WAKDE_DB_USER", "WAKDE_DB_PASSWORD"):
+    os.environ[_k] = ""
+
 import app as app_module  # noqa: E402
 import prompts as prompts_module  # noqa: E402
 

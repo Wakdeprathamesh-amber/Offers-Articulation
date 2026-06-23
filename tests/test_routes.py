@@ -41,7 +41,7 @@ def test_generate_happy_path(client, appmod, monkeypatch):
         "needs_kam_confirmation": False,
         "offers": [{"properties": ["P"], "title": "Save £500 OFF!", "body": "b", "terms": [], "missing_info": []}],
     }
-    monkeypatch.setattr(appmod, "generate_offer", lambda c, p, r: appmod.postprocess(fake))
+    monkeypatch.setattr(appmod, "generate_offer", lambda *a, **k: appmod.postprocess(fake))
     r = client.post("/generate", json={"raw_offer": "£500 off", "country": "United Kingdom", "property_name": "P"})
     assert r.status_code == 200
     data = r.get_json()
@@ -161,4 +161,52 @@ def test_extract_pdf_missing_filename_guarded(client, appmod, monkeypatch):
     # filename="" should be a clean 400, not a crash
     data = {"pdf": (io.BytesIO(b"%PDF-1.4"), "")}
     r = client.post("/extract-pdf", data=data, content_type="multipart/form-data")
+    assert r.status_code == 400
+
+
+# ------------------------------------------------------------- DB run-logging
+def test_generate_attaches_run_id(client, appmod, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    fake = {"applicable": True, "assessment": "ok", "flags": ["none"],
+            "needs_kam_confirmation": False,
+            "offers": [{"properties": ["P"], "title": "Save £500 OFF!", "body": "b", "terms": [], "missing_info": []}]}
+    monkeypatch.setattr(appmod, "generate_offer", lambda *a, **k: appmod.postprocess(fake))
+    monkeypatch.setattr(appmod.db, "log_run", lambda *a, **k: 999)
+    r = client.post("/generate", json={"raw_offer": "£500 off", "country": "United Kingdom", "property_name": "P"})
+    assert r.status_code == 200
+    assert r.get_json()["run_id"] == 999
+
+
+def test_generate_no_run_id_when_db_disabled(client, appmod, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    fake = {"applicable": True, "flags": ["none"], "offers": []}
+    monkeypatch.setattr(appmod, "generate_offer", lambda *a, **k: appmod.postprocess(fake))
+    monkeypatch.setattr(appmod.db, "log_run", lambda *a, **k: None)
+    r = client.post("/generate", json={"raw_offer": "x", "country": "UK", "property_name": "P"})
+    assert r.status_code == 200
+    assert "run_id" not in r.get_json()
+
+
+def test_feedback_success(client, appmod, monkeypatch):
+    called = {}
+    monkeypatch.setattr(appmod.db, "save_feedback",
+                        lambda run_id, rating, comment: called.update(run_id=run_id, rating=rating, comment=comment) or True)
+    r = client.post("/feedback", json={"run_id": 12, "rating": 4, "comment": "good"})
+    assert r.status_code == 200 and r.get_json()["ok"] is True
+    assert called == {"run_id": 12, "rating": 4, "comment": "good"}
+
+
+def test_feedback_requires_run_id(client):
+    r = client.post("/feedback", json={"rating": 5})
+    assert r.status_code == 400
+
+
+def test_feedback_rejects_bad_rating(client, appmod, monkeypatch):
+    monkeypatch.setattr(appmod.db, "save_feedback", lambda *a, **k: True)
+    r = client.post("/feedback", json={"run_id": 1, "rating": 9})
+    assert r.status_code == 400
+
+
+def test_feedback_requires_rating_or_comment(client):
+    r = client.post("/feedback", json={"run_id": 1})
     assert r.status_code == 400

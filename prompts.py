@@ -419,8 +419,13 @@ All three use the 7 generic T&Cs.
 """.strip()
 
 
-def build_user_prompt(country: str, property_name: str, raw_offer: str) -> str:
-    """Assemble the user message for a single generation request."""
+def build_user_prompt(country: str, property_name: str, raw_offer: str, tnc: str = "") -> str:
+    """Assemble the user message for a single generation request.
+
+    If `tnc` is provided (the user pasted Terms & Conditions in the separate box),
+    it is shown as a clearly-labelled T&Cs section so the model rewrites those for
+    the T&Cs and builds the body only from the offer source.
+    """
     currency = CURRENCY_MAP.get((country or "").strip(), None)
     if currency:
         currency_line = f"Country: {country} (use currency symbol: {currency})"
@@ -429,6 +434,17 @@ def build_user_prompt(country: str, property_name: str, raw_offer: str) -> str:
     else:
         currency_line = "Country: not specified"
     prop_line = f"Property name(s): {property_name}" if property_name else "Property name(s): not specified"
+
+    tnc = (tnc or "").strip()
+    if tnc:
+        tnc_block = (
+            f"\nPROVIDED TERMS & CONDITIONS (verbatim, rewrite THESE for the T&Cs; "
+            f"do NOT use the generic list, and do NOT move these into the body):\n"
+            f'"""\n{tnc}\n"""\n'
+        )
+    else:
+        tnc_block = ""
+
     return (
         f"{currency_line}\n"
         f"{prop_line}\n\n"
@@ -437,9 +453,11 @@ def build_user_prompt(country: str, property_name: str, raw_offer: str) -> str:
         f"NOW WRITE THE OFFER FOR THIS SOURCE\n"
         f"================================================================\n"
         f"Read the ENTIRE source below, including any Terms & Conditions block, "
-        f"and capture every relevant detail. Match the depth and human style of "
-        f"the examples above. No em dashes or en dashes anywhere.\n\n"
+        f"and capture every relevant detail. Build the body ONLY from the offer "
+        f"source and the T&Cs ONLY from any T&Cs. Match the depth and human style "
+        f"of the examples above. No em dashes or en dashes anywhere.\n\n"
         f"RAW OFFER SOURCE (verbatim from the ticket / email / website):\n"
-        f'"""\n{raw_offer}\n"""\n\n'
+        f'"""\n{raw_offer}\n"""\n'
+        f"{tnc_block}\n"
         f"Produce the JSON output now."
     )

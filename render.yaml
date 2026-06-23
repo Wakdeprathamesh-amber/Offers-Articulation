@@ -18,3 +18,15 @@ services:
         value: "60"          # gpt-5.5 is slower than gpt-4o; give requests headroom
       - key: PYTHON_VERSION
         value: 3.12.6
+      # PostgreSQL run-logging. Set all of these securely in the Render dashboard
+      # (never commit DB credentials). If unset, run-logging is simply disabled.
+      - key: WAKDE_DB_HOST
+        sync: false
+      - key: WAKDE_DB_PORT
+        sync: false
+      - key: WAKDE_DB_NAME
+        sync: false
+      - key: WAKDE_DB_USER
+        sync: false
+      - key: WAKDE_DB_PASSWORD
+        sync: false
