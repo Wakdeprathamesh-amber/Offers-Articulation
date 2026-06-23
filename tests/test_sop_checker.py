@@ -23,7 +23,7 @@ GOOD = {
         {
             "properties": ["Maple Heights Residences, Toronto"],
             "title": "Special Deal: Get CA$750 CASHBACK Today!",
-            "body": "Book a room at Maple Heights Residences and receive CA$750 cashback! "
+            "body": "Book a room at this property and receive CA$750 cashback! "
                     "Available for the 2026-2027 academic year. Apply now to claim this offer!",
             "terms": [
                 "(1) The CA$750 cashback will be credited after move-in.",
@@ -192,3 +192,22 @@ def test_lowercase_us_pronoun_still_flagged():
     bad = _mutate_terms(["(1) Contact us to claim, and we will assist you."])
     v = check_compliance(bad, GOOD_CTX)
     assert "TERMS_FIRST_PERSON" in _rules(v)
+
+
+def test_brand_leak_property_name_flagged():
+    bad = _clone(GOOD)
+    bad["offers"][0]["body"] = "Book a room at Maple Heights Residences and save CA$750! Apply now!"
+    v = check_compliance(bad, GOOD_CTX)
+    assert "BRAND_LEAK" in _rules(v)
+
+
+def test_brand_leak_operator_name_flagged():
+    bad = _clone(GOOD)
+    bad["offers"][0]["terms"] = ["(1) Credited by Maple Living Group after move-in."]
+    v = check_compliance(bad, GOOD_CTX)
+    assert "BRAND_LEAK" in _rules(v)
+
+
+def test_generalised_copy_has_no_brand_leak():
+    v = check_compliance(GOOD, GOOD_CTX)  # GOOD body now says 'this property'
+    assert "BRAND_LEAK" not in _rules(v)

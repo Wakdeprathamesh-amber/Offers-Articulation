@@ -179,15 +179,25 @@ def check_compliance(result, context):
         if _EMAIL_RE.search(body) or _URL_RE.search(body) or _PHONE_RE.search(body):
             violations.append(_v("error", "BODY_CONTACT", "body contains an email/url/phone number", i))
 
-        props = ctx.get("property_names") or offer.get("properties") or []
-        if len(props) == 1:
-            pname = props[0].split(",")[0].strip()
-            body_l = body.lower()
-            significant = [w for w in pname.split() if len(w) > 3]
-            first_two = " ".join(significant[:2]).lower()
-            mentioned = (pname.lower() in body_l) or (first_two and first_two in body_l)
-            if pname and not mentioned:
-                violations.append(_v("warn", "BODY_PROPERTY", f"body does not mention property '{pname}'", i))
+        # ---- BRAND LEAK ----------------------------------------------------
+        # No brand name (specific property OR operator/company) may appear in the
+        # copy: the offer sits on the property's own page, and we do not advertise
+        # the operator's branding. Should read "the property" / "Property Management".
+        brand_terms = []
+        for p in (ctx.get("property_names") or offer.get("properties") or []):
+            core = str(p).split(",")[0].strip()
+            if len(core) >= 4:
+                brand_terms.append(core)
+        for op in (ctx.get("operator_names") or []):
+            if len(str(op).strip()) >= 3:
+                brand_terms.append(str(op).strip())
+        copy_blob = (title + " " + body + " " + " ".join(terms)).lower()
+        for bt in brand_terms:
+            if bt.lower() in copy_blob:
+                violations.append(
+                    _v("warn", "BRAND_LEAK",
+                       f"brand name '{bt}' appears in the copy; generalise to 'the property' / 'Property Management'", i))
+                break
 
         cta_words = ("book", "apply", "secure", "claim", "don't miss", "reserve",
                      "enquire", "grab", "act fast", "sign")

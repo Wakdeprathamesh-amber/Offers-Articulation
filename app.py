@@ -96,12 +96,12 @@ def generate_offer(country: str, property_name: str, raw_offer: str) -> dict:
         else:
             raise
     data = json.loads(response.choices[0].message.content)
-    result = postprocess(data, country=country)
-    result["warnings"] = _compliance_warnings(result, country)
+    result = postprocess(data, country=country, property_name=property_name)
+    result["warnings"] = _compliance_warnings(result, country, property_name)
     return result
 
 
-def _compliance_warnings(result: dict, country: str) -> list:
+def _compliance_warnings(result: dict, country: str, property_name: str = "") -> list:
     """Run the SOP checker over the final output and return any violations.
     Informational only; never raises."""
     from sop_checker import check_compliance
@@ -116,9 +116,11 @@ def _compliance_warnings(result: dict, country: str) -> list:
     detected = result.get("detected_operator_names", []) or []
     operator_names = [n for n in detected if n and n.lower() not in props_blob]
 
+    property_names = [property_name] if property_name else None
     ctx = {
         "country": country,
         "operator_names": operator_names,
+        "property_names": property_names,
         "source_has_tncs": result.get("source_has_tncs", False),
     }
     try:
@@ -128,13 +130,13 @@ def _compliance_warnings(result: dict, country: str) -> list:
         return []
 
 
-def postprocess(data: dict, country: str = "") -> dict:
+def postprocess(data: dict, country: str = "", property_name: str = "") -> dict:
     """Full deterministic post-processing pipeline applied to the model output.
 
     Order matters: normalise shape first so every downstream step can assume a
     well-formed dict, then strip dashes, strip contact info, fix currency, fix
     first person, drop agent/commission terms (and renumber), rename the operator,
-    and finally annotate title lengths.
+    generalise the property name, and finally annotate title lengths.
     """
     data = _normalize(data)
     expected_symbol = CURRENCY_MAP.get((country or "").strip())
@@ -145,6 +147,7 @@ def postprocess(data: dict, country: str = "") -> dict:
     data = _fix_first_person(data)
     data = _clean_agent_terms(data)
     data = _rename_operator(data, detected)
+    data = _generalise_property(data, property_name)
     data = _annotate(data)
     return data
 
@@ -467,6 +470,38 @@ def _rename_operator(data: dict, detected_names=()) -> dict:
             offer["body"] = fix_patterns(blanket(offer["body"]))
         if isinstance(offer.get("terms"), list):
             offer["terms"] = [fix_patterns(blanket(t)) for t in offer["terms"]]
+    return data
+
+
+def _generalise_property(data: dict, property_name: str) -> dict:
+    """Replace the specific property's brand name with 'the property' in the copy.
+    The offer is shown on the property's own page on amber, so the brand name is
+    not needed and we do not advertise the operator's branding. Operator/company
+    names are handled separately by _rename_operator -> 'Property Management'."""
+    name = (property_name or "").strip()
+    if not name:
+        return data
+    variants = {name}
+    core = name.split(",")[0].strip()
+    if core:
+        variants.add(core)
+    pats = [re.compile(rf"\b{re.escape(v)}\b", re.I)
+            for v in sorted(variants, key=len, reverse=True)]
+
+    def fix(text):
+        if not isinstance(text, str):
+            return text
+        for p in pats:
+            text = p.sub("the property", text)
+        text = re.sub(r"\bthe\s+the property\b", "the property", text, flags=re.I)
+        return text
+
+    for offer in data.get("offers", []) or []:
+        for key in ("title", "body"):
+            if isinstance(offer.get(key), str):
+                offer[key] = fix(offer[key])
+        if isinstance(offer.get("terms"), list):
+            offer["terms"] = [fix(t) for t in offer["terms"]]
     return data
 
 
