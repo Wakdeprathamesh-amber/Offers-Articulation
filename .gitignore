@@ -2,6 +2,11 @@
 .env
 *.env
 !.env.example
+# Google service-account credentials (never commit)
+*credentials*.json
+*service-account*.json
+service_account*.json
+google-credentials.json
 
 # Python
 venv/

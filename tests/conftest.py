@@ -13,7 +13,8 @@ if ROOT not in sys.path:
 # Neutralise the database for the offline test suite BEFORE importing app: blank
 # the WAKDE_DB_* vars so db.is_enabled() is False and no test ever connects to or
 # writes to the real database. load_dotenv(override=False) will not overwrite these.
-for _k in ("WAKDE_DB_HOST", "WAKDE_DB_PORT", "WAKDE_DB_NAME", "WAKDE_DB_USER", "WAKDE_DB_PASSWORD"):
+for _k in ("WAKDE_DB_HOST", "WAKDE_DB_PORT", "WAKDE_DB_NAME", "WAKDE_DB_USER", "WAKDE_DB_PASSWORD",
+           "GOOGLE_SHEET_ID", "GOOGLE_SHEETS_CREDENTIALS_JSON", "GOOGLE_SHEETS_CREDENTIALS_FILE"):
     os.environ[_k] = ""
 
 import app as app_module  # noqa: E402

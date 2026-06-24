@@ -31,17 +31,21 @@ try:
 except Exception:
     pass
 
-import db  # PostgreSQL run-logging (best-effort; no-ops if not configured)
+import store  # run-logging backend (Google Sheets or Postgres; no-ops if unconfigured)
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB upload cap
 
-# Best-effort: ensure the runs table exists. Never blocks startup.
+# Best-effort: prepare the logging backend and report which one is active.
 try:
-    if db.is_enabled():
-        db.init_db()
+    if store.is_enabled():
+        ok = store.init()
+        app.logger.info("run-logging backend: %s (init %s)",
+                        store.backend_name(), "ok" if ok else "FAILED")
+    else:
+        app.logger.info("run-logging backend: none (logging disabled)")
 except Exception:
-    pass
+    app.logger.exception("run-logging init failed")
 
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 TEMPERATURE = float(os.environ.get("OPENAI_TEMPERATURE", "0.3"))
@@ -678,8 +682,8 @@ def generate():
 
     # Best-effort run logging; never blocks the response.
     output_offer, output_tnc = _output_strings(result)
-    run_id = db.log_run(country, property_name, MODEL, raw_offer, raw_tnc,
-                        output_offer, output_tnc, result)
+    run_id = store.log_run(country, property_name, MODEL, raw_offer, raw_tnc,
+                           output_offer, output_tnc, result)
     if run_id is not None:
         result["run_id"] = run_id
 
@@ -694,12 +698,9 @@ def feedback():
     rating = payload.get("rating")
     comment = (payload.get("comment") or "").strip() or None
 
-    if run_id is None:
+    # run_id may be an int (Postgres) or a string id (Google Sheets); just require it.
+    if run_id is None or (isinstance(run_id, str) and not run_id.strip()):
         return jsonify({"error": "run_id is required."}), 400
-    try:
-        run_id = int(run_id)
-    except (TypeError, ValueError):
-        return jsonify({"error": "run_id must be an integer."}), 400
 
     if rating is not None:
         try:
@@ -712,7 +713,7 @@ def feedback():
     if rating is None and comment is None:
         return jsonify({"error": "Provide a rating and/or a comment."}), 400
 
-    ok = db.save_feedback(run_id, rating, comment)
+    ok = store.save_feedback(run_id, rating, comment)
     if not ok:
         return jsonify({"error": "Could not save feedback."}), 500
     return jsonify({"ok": True})

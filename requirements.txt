@@ -3,5 +3,7 @@ openai>=1.30
 pypdf>=4.0
 pymupdf>=1.24        # render image/scanned PDF pages to images for vision OCR
 psycopg2-binary>=2.9 # PostgreSQL run-logging (input/output/rating history)
+gspread>=6.0         # Google Sheets run-logging backend (Render-reachable)
+google-auth>=2.0     # service-account auth for Google Sheets
 python-dotenv>=1.0
 gunicorn>=21.2
