@@ -186,9 +186,11 @@
       sel.appendChild(allGroup);
     })();
 
-    $("extractBtn").addEventListener("click", async () => {
-      const file = $("pdf").files[0];
-      if (!file) { alert("Choose a PDF or image first."); return; }
+    // Tracks the last file we ran extraction on, so we never extract the same
+    // file twice and never silently ignore an uploaded-but-not-extracted file.
+    let _extractedFile = null;
+
+    async function doExtract(file) {
       const btn = $("extractBtn");
       btn.disabled = true; btn.textContent = "Extracting…";
       try {
@@ -196,6 +198,7 @@
         fd.append("pdf", file);
         const res = await fetch("/extract-pdf", { method: "POST", body: fd });
         const data = await res.json();
+        _extractedFile = file;  // mark attempted regardless of outcome
         if (data.error) { alert(data.error); }
         else if (data.warning) { alert(data.warning); }
         else if (data.text) {
@@ -205,13 +208,42 @@
             alert("This file was read by AI. Please check the extracted text for accuracy before generating.");
           }
         }
-      } catch (e) { alert("Extraction failed: " + e); }
-      finally { btn.disabled = false; btn.textContent = "Extract from PDF / Image"; }
+        return data;
+      } catch (e) {
+        _extractedFile = file;
+        alert("Extraction failed: " + e);
+        return { error: String(e) };
+      } finally {
+        btn.disabled = false; btn.textContent = "Extract from PDF / Image";
+      }
+    }
+
+    // Auto-extract as soon as a file is chosen, so the user never has to remember
+    // to click Extract before Generate.
+    $("pdf").addEventListener("change", () => {
+      const file = $("pdf").files[0];
+      if (file) doExtract(file);
+    });
+
+    $("extractBtn").addEventListener("click", () => {
+      const file = $("pdf").files[0];
+      if (!file) { alert("Choose a PDF or image first."); return; }
+      doExtract(file);  // manual (re-)extract
     });
 
     $("generateBtn").addEventListener("click", async () => {
+      // Safety net: if a file is selected but has not been extracted into the box
+      // yet, extract it now instead of generating as if nothing was uploaded.
+      const file = $("pdf").files[0];
+      if (file && file !== _extractedFile) {
+        await doExtract(file);
+      }
       const raw_offer = $("offer").value.trim();
-      if (!raw_offer) { alert("Paste the raw offer text first."); return; }
+      if (!raw_offer) {
+        alert(file ? "Could not read any text from the uploaded file. Please paste the offer text manually."
+                   : "Paste the raw offer text or upload a PDF/image first.");
+        return;
+      }
       const out = $("output");
       const btn = $("generateBtn");
       btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Generating…';
