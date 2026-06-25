@@ -127,9 +127,9 @@
 
         <div class="filebar">
           <input type="file" id="pdf" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*" />
-          <button class="ghost" id="extractBtn" type="button">Extract from PDF / Image</button>
+          <span id="fileStatus" class="hint"></span>
         </div>
-        <div class="hint">Upload a PDF or a screenshot/image of the offer. Text PDFs are read directly; scans, screenshots and images are read by AI. Extracted text is appended above for you to review and edit before generating.</div>
+        <div class="hint">Or upload a PDF / screenshot / image of the offer. It is read automatically and added to the box above for you to review. Then just click Generate. (Text PDFs are read directly; scans and images are read by AI.)</div>
 
         <button id="generateBtn" type="button">Generate offer content</button>
       </div>
@@ -186,54 +186,50 @@
       sel.appendChild(allGroup);
     })();
 
-    // Tracks the last file we ran extraction on, so we never extract the same
-    // file twice and never silently ignore an uploaded-but-not-extracted file.
+    // Tracks the last file we read, so we never read the same file twice and
+    // never silently ignore an uploaded file. No separate "Extract" button:
+    // upload auto-reads the file, and Generate reads it too if needed.
     let _extractedFile = null;
 
+    function setFileStatus(msg) { $("fileStatus").textContent = msg || ""; }
+
     async function doExtract(file) {
-      const btn = $("extractBtn");
-      btn.disabled = true; btn.textContent = "Extracting…";
+      setFileStatus("Reading file…");
       try {
         const fd = new FormData();
         fd.append("pdf", file);
         const res = await fetch("/extract-pdf", { method: "POST", body: fd });
         const data = await res.json();
         _extractedFile = file;  // mark attempted regardless of outcome
-        if (data.error) { alert(data.error); }
-        else if (data.warning) { alert(data.warning); }
+        if (data.error) { setFileStatus("⚠ " + data.error); }
+        else if (data.warning) { setFileStatus("⚠ " + data.warning); }
         else if (data.text) {
           const box = $("offer");
           box.value = (box.value ? box.value + "\n\n" : "") + data.text;
-          if (data.source === "vision") {
-            alert("This file was read by AI. Please check the extracted text for accuracy before generating.");
-          }
+          setFileStatus(data.source === "vision"
+            ? "✓ Read by AI — please check the text above for accuracy."
+            : "✓ Text extracted — review it above.");
+        } else {
+          setFileStatus("");
         }
         return data;
       } catch (e) {
         _extractedFile = file;
-        alert("Extraction failed: " + e);
+        setFileStatus("⚠ Could not read the file: " + e);
         return { error: String(e) };
-      } finally {
-        btn.disabled = false; btn.textContent = "Extract from PDF / Image";
       }
     }
 
-    // Auto-extract as soon as a file is chosen, so the user never has to remember
-    // to click Extract before Generate.
+    // Auto-read the file the moment it is chosen, so the user never needs a
+    // separate Extract step before Generate.
     $("pdf").addEventListener("change", () => {
       const file = $("pdf").files[0];
       if (file) doExtract(file);
     });
 
-    $("extractBtn").addEventListener("click", () => {
-      const file = $("pdf").files[0];
-      if (!file) { alert("Choose a PDF or image first."); return; }
-      doExtract(file);  // manual (re-)extract
-    });
-
     $("generateBtn").addEventListener("click", async () => {
-      // Safety net: if a file is selected but has not been extracted into the box
-      // yet, extract it now instead of generating as if nothing was uploaded.
+      // Safety net: if a file is selected but has not been read into the box yet,
+      // read it now instead of generating as if nothing was uploaded.
       const file = $("pdf").files[0];
       if (file && file !== _extractedFile) {
         await doExtract(file);
