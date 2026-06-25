@@ -256,11 +256,10 @@
       }
 
       const offers = data.offers || [];
+      window.__lastOffers = offers;
       if (!offers.length) {
-        html += `<div class="placeholder">No content generated.</div>`;
-        out.innerHTML = html; return;
-      }
-
+        html += `<div class="placeholder">No offer content generated (see the verdict above).</div>`;
+      } else {
       offers.forEach((o, idx) => {
         html += `<div class="offer">`;
         if (o.properties && o.properties.length) {
@@ -288,17 +287,16 @@
         }
         html += `</div>`;
       });
-
-      // Feedback widget (only when the run was logged to the DB).
-      if (data.run_id) {
-        html += `<div class="feedback" data-run="${data.run_id}">
-          <div class="flabel"><span>Rate this result</span></div>
-          <div class="stars" id="stars">${[1,2,3,4,5].map((n)=>`<span class="star" data-v="${n}">☆</span>`).join("")}</div>
-          <textarea id="fbComment" placeholder="Optional: what was wrong or could be better?"></textarea>
-          <button class="ghost" id="fbSubmit" type="button">Submit feedback</button>
-          <span id="fbMsg" class="hint"></span>
-        </div>`;
       }
+
+      // Feedback widget — always shown so the user can rate/comment every result.
+      html += `<div class="feedback" data-run="${data.run_id || ''}">
+        <div class="flabel"><span>Rate this result</span></div>
+        <div class="stars" id="stars">${[1,2,3,4,5].map((n)=>`<span class="star" data-v="${n}">☆</span>`).join("")}</div>
+        <textarea id="fbComment" placeholder="Optional: a comment or suggestion on this result"></textarea>
+        <button class="ghost" id="fbSubmit" type="button">Submit feedback</button>
+        <span id="fbMsg" class="hint"></span>
+      </div>`;
 
       out.innerHTML = html;
       attachCopyHandlers();
@@ -320,10 +318,22 @@
         const comment = wrap.querySelector("#fbComment").value.trim();
         const msg = wrap.querySelector("#fbMsg");
         if (!_rating && !comment) { msg.textContent = "Pick a rating or write a comment first."; return; }
+        msg.textContent = "Saving…";
         try {
           const res = await fetch("/feedback", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ run_id: parseInt(runId, 10), rating: _rating || null, comment }),
+            body: JSON.stringify({
+              run_id: runId || null,
+              rating: _rating || null,
+              comment,
+              context: {
+                country: $("country").value,
+                property_name: $("property").value,
+                raw_offer: $("offer").value,
+                raw_tnc: $("tnc").value,
+                offers: window.__lastOffers || [],
+              },
+            }),
           });
           const data = await res.json();
           msg.textContent = data.ok ? "Thanks! Feedback saved." : ("Could not save: " + (data.error || ""));

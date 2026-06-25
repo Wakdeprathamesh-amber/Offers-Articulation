@@ -165,9 +165,24 @@ def test_feedback_success(client, appmod, monkeypatch):
     assert called == {"run_id": 12, "rating": 4, "comment": "good"}
 
 
-def test_feedback_requires_run_id(client):
-    r = client.post("/feedback", json={"rating": 5})
-    assert r.status_code == 400
+def test_feedback_without_run_id_logs_a_new_row(client, appmod, monkeypatch):
+    # No run_id (run wasn't logged) -> create a fresh row from context, then save.
+    logged = {}
+    monkeypatch.setattr(appmod.store, "save_feedback",
+                        lambda run_id, rating, comment: logged.update(saved_id=run_id) or True)
+    monkeypatch.setattr(appmod.store, "log_run", lambda *a, **k: "new123")
+    r = client.post("/feedback", json={"rating": 4, "comment": "nice",
+                                       "context": {"country": "UK", "offers": [{"title": "T", "terms": []}]}})
+    assert r.status_code == 200 and r.get_json()["ok"] is True
+    assert logged["saved_id"] == "new123"
+
+
+def test_feedback_unavailable_when_no_backend(client, appmod, monkeypatch):
+    # No run_id and logging disabled -> 503, never crashes.
+    monkeypatch.setattr(appmod.store, "save_feedback", lambda *a, **k: False)
+    monkeypatch.setattr(appmod.store, "log_run", lambda *a, **k: None)
+    r = client.post("/feedback", json={"rating": 4, "comment": "nice", "context": {}})
+    assert r.status_code == 503
 
 
 def test_feedback_rejects_bad_rating(client, appmod, monkeypatch):

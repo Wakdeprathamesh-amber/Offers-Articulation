@@ -650,15 +650,16 @@ def generate():
 
 @app.route("/feedback", methods=["POST"])
 def feedback():
-    """Attach a rating (1-5) and/or comment to a previously logged run."""
+    """Save a rating (1-5) and/or comment for a generation.
+
+    If a run_id is supplied (the run was logged), update that row. Otherwise log a
+    fresh row from the context the UI sends, so feedback is captured even when the
+    original generation wasn't logged."""
     payload = request.get_json(force=True, silent=True) or {}
     run_id = payload.get("run_id")
     rating = payload.get("rating")
     comment = (payload.get("comment") or "").strip() or None
-
-    # run_id may be an int (Postgres) or a string id (Google Sheets); just require it.
-    if run_id is None or (isinstance(run_id, str) and not run_id.strip()):
-        return jsonify({"error": "run_id is required."}), 400
+    ctx = payload.get("context") or {}
 
     if rating is not None:
         try:
@@ -671,9 +672,24 @@ def feedback():
     if rating is None and comment is None:
         return jsonify({"error": "Provide a rating and/or a comment."}), 400
 
-    ok = store.save_feedback(run_id, rating, comment)
+    ok = False
+    if run_id not in (None, "") and not (isinstance(run_id, str) and not run_id.strip()):
+        ok = store.save_feedback(run_id, rating, comment)
+
     if not ok:
-        return jsonify({"error": "Could not save feedback."}), 500
+        # No run_id (or row not found) -> log a fresh row from the UI context.
+        offers = ctx.get("offers") or []
+        output_offer, output_tnc = _output_strings({"offers": offers})
+        new_id = store.log_run(
+            ctx.get("country", ""), ctx.get("property_name", ""), MODEL,
+            ctx.get("raw_offer", ""), ctx.get("raw_tnc", ""),
+            output_offer, output_tnc, {"offers": offers},
+        )
+        if new_id is not None:
+            ok = store.save_feedback(new_id, rating, comment)
+
+    if not ok:
+        return jsonify({"error": "Could not save feedback (run logging is not configured)."}), 503
     return jsonify({"ok": True})
 
 
