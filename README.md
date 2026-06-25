@@ -1,6 +1,6 @@
 # amber · Offer Content Automation (v1)
 
-Turns a raw promotional offer (pasted text or a text-based PDF) into
+Turns a raw promotional offer (pasted text or an uploaded PDF/screenshot/image) into
 **SOP-compliant Offer Title, Offer Body and Terms & Conditions**, and flags
 offers that are **not applicable to Amber** (direct-booking-only, lucky draw,
 refer-a-friend, borderline low-rate). It encodes `SOP - Offer.docx` and is
@@ -36,9 +36,10 @@ Open <http://127.0.0.1:5000>.
 
 1. Pick the **Country** (sets the correct currency: £ / US$ / AU$ / CA$ / S$).
 2. Enter the **property name(s)**.
-3. Paste the **raw offer text**, or upload a **text-based PDF** and click
-   *Extract from PDF*.
-4. Click **Generate offer content**.
+3. Either **paste the offer text** (with optional separate T&Cs), **or upload a
+   PDF / screenshot / image** of the offer (use one or the other, not both).
+4. Click **Generate offer content**. An uploaded file is sent straight to the
+   model (`gpt-5.5`) — no separate extraction step.
 
 Output shows an applicability verdict (✓ / ✗ / ⚠ needs KAM), exclusion flags,
 and for each offer the Title (with live character count vs the 60/72 limits),
@@ -52,11 +53,10 @@ publishing** panel so the reviewer can correct it before copying.
 
 ## Notes / limits (v1)
 
-- **PDF, screenshots and images supported.** Text-based PDFs are read directly.
-  Scanned/screenshot PDFs and image uploads (PNG/JPG/WEBP) are read with the
-  model's vision (`gpt-5.5`) when `OPENAI_API_KEY` is set; the transcribed text is
-  appended to the box for you to review before generating. With no key set, a
-  scanned file warns you to paste the text manually.
+- **PDF, screenshots and images supported.** An uploaded PDF/PNG/JPG/WEBP is sent
+  **directly to the model** (`gpt-5.5`, multimodal) — PDF pages are rasterised to
+  images first; there is no separate text-extraction step. Paste text instead if
+  you prefer.
 - **All output copy is brand-generic.** The specific property name and the
   operator/PMG company name are replaced with "the property" / "Property
   Management" so amber does not advertise the operator's branding.
@@ -89,7 +89,7 @@ This repo is Render-ready (`render.yaml` + `gunicorn`).
 
 | File | Purpose |
 |------|---------|
-| `app.py` | Flask server: routes, PDF text extraction, OpenAI call |
+| `app.py` | Flask server: routes, PDF→image rasterising, OpenAI call, post-processing |
 | `prompts.py` | SOP-encoded system prompt, currency map, generic T&Cs, few-shot examples |
 | `templates/index.html` | Single-page UI |
 | `requirements.txt` | Dependencies |

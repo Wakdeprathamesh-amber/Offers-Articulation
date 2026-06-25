@@ -55,13 +55,12 @@ plumbing tests cannot. Always run it before shipping a prompt change.
 | `test_live_gate.py` | Live SOP warnings | clean output has no error warnings; residual first-person flagged; operator-in-property-name not false-flagged; never crashes on odd output |
 | `test_generalise.py` | Brand generalisation | property name replaced with "the property" (full + core); no double "the"; empty no-op; runs in postprocess |
 | `test_model_compat.py` | Model compatibility | falls back without temperature on gpt-5/5.5; non-temperature errors still raise |
-| `test_vision.py` | Vision/OCR extraction (mocked) | image PDF + image upload use vision; text PDF skips vision; no-key warns; unsupported ext rejected; empty vision warns |
+| `test_upload.py` | File → images for direct multimodal generation | image passthrough + mime; PDF rasterised to PNG pages; data-URI content built |
 | `test_normalize.py` | Output-shape contract | missing keys, non-dict input, string→list coercion for flags/properties/terms/missing_info, bad offer entries skipped |
 | `test_annotate.py` | Title length status | 60 target / 72 hard cap boundaries, missing/None title, unicode currency char count |
 | `test_postprocess.py` | Full pipeline + `generate_offer` (mocked OpenAI) | combined clean+normalize+renumber, idempotency, bad-JSON propagation |
-| `test_routes.py` | Flask endpoints | `/` loads; `/generate` empty/no-key/happy/exception/non-JSON/bad-model-JSON; `/extract-pdf` no-file/wrong-ext/real-image-PDF warning/extraction-error/happy |
+| `test_routes.py` | Flask endpoints | `/` loads; `/generate` empty/no-key/happy/exception/non-JSON/bad-model-JSON; file-upload sends images directly + unsupported ext rejected |
 | `test_operator_rename.py` | Operator-name safety net | unseen operators in "reserves the right" / "any other X property"; property name untouched; idempotent |
-| `test_pdf.py` | PDF extraction | real example PDFs have no text layer; generated text PDF extracts; corrupt PDF raises |
 | `test_sop_checker.py` | The SOP linter itself | good output passes; each rule (currency, hard cap, Book-start, digits, Title Case, power word, first-person, operator leak, agent clause, email, bullets, dashes, CTA, applicability) is flagged on a bad sample |
 | `test_live_examples.py` | Live quality (opt-in) | UK £500, US multi-offer varied hooks, AUS T&C agent-clause removal, direct-booking/lucky-draw flagging |
 | `test_sop_compliance_live.py` | Live SOP compliance (opt-in) | every scenario in `scenarios.py` must produce ZERO SOP errors |

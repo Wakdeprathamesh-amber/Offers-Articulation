@@ -22,7 +22,7 @@ def test_generate_empty_offer_returns_400(client, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     r = client.post("/generate", json={"raw_offer": "   "})
     assert r.status_code == 400
-    assert "raw offer" in r.get_json()["error"].lower()
+    assert "offer text" in r.get_json()["error"].lower()
 
 
 def test_generate_missing_key_returns_400(client, monkeypatch):
@@ -79,58 +79,6 @@ def test_generate_bad_json_from_model_is_clean_500(client, appmod, monkeypatch):
     assert "Generation failed" in r.get_json()["error"]
 
 
-# ------------------------------------------------------------- POST /extract-pdf
-def test_extract_pdf_no_file(client):
-    r = client.post("/extract-pdf", data={}, content_type="multipart/form-data")
-    assert r.status_code == 400
-    assert "No PDF" in r.get_json()["error"]
-
-
-def test_extract_pdf_wrong_extension(client):
-    data = {"pdf": (io.BytesIO(b"hello"), "notes.txt")}
-    r = client.post("/extract-pdf", data=data, content_type="multipart/form-data")
-    assert r.status_code == 400
-    assert ".pdf" in r.get_json()["error"]
-
-
-def test_extract_pdf_image_based_real_file_warns(client, monkeypatch):
-    """The real example PDFs are screenshots (no text layer). With no API key the
-    vision path is unavailable, so we warn and ask the user to paste."""
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    path = os.path.join(root, "UK offer.pdf")
-    if not os.path.exists(path):
-        pytest.skip("example PDF not present")
-    with open(path, "rb") as f:
-        data = {"pdf": (io.BytesIO(f.read()), "UK offer.pdf")}
-    r = client.post("/extract-pdf", data=data, content_type="multipart/form-data")
-    assert r.status_code == 200
-    body = r.get_json()
-    assert body["text"] == ""
-    assert "warning" in body
-    # our own warning text must not contain an em dash
-    assert "—" not in body["warning"]
-
-
-def test_extract_pdf_extraction_error_returns_400(client, appmod, monkeypatch):
-    def boom(_):
-        raise ValueError("corrupt pdf")
-
-    monkeypatch.setattr(appmod, "extract_pdf_text", boom)
-    data = {"pdf": (io.BytesIO(b"%PDF-1.4 broken"), "x.pdf")}
-    r = client.post("/extract-pdf", data=data, content_type="multipart/form-data")
-    assert r.status_code == 400
-    assert "Could not read PDF" in r.get_json()["error"]
-
-
-def test_extract_pdf_happy_path_mocked(client, appmod, monkeypatch):
-    monkeypatch.setattr(appmod, "extract_pdf_text", lambda _: "Extracted offer text here")
-    data = {"pdf": (io.BytesIO(b"%PDF-1.4 whatever"), "real.pdf")}
-    r = client.post("/extract-pdf", data=data, content_type="multipart/form-data")
-    assert r.status_code == 200
-    assert r.get_json()["text"] == "Extracted offer text here"
-
-
 def test_raw_offer_too_long_returns_400(client, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     r = client.post("/generate", json={"raw_offer": "x" * 20001})
@@ -156,12 +104,33 @@ def test_max_content_length_configured(appmod):
     assert appmod.app.config.get("MAX_CONTENT_LENGTH") == 8 * 1024 * 1024
 
 
-def test_extract_pdf_missing_filename_guarded(client, appmod, monkeypatch):
-    import io
-    # filename="" should be a clean 400, not a crash
-    data = {"pdf": (io.BytesIO(b"%PDF-1.4"), "")}
-    r = client.post("/extract-pdf", data=data, content_type="multipart/form-data")
+# ----------------------------------------------- POST /generate with a file upload
+def test_generate_with_file_sends_images_directly(client, appmod, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setattr(appmod, "file_to_images", lambda data, fn: ([b"img-bytes"], "image/png"))
+    captured = {}
+
+    def fake_gen(country, property_name, **kw):
+        captured.update(country=country, property_name=property_name, **kw)
+        return appmod.postprocess({"applicable": True, "offers": [
+            {"title": "Big Bonus: Get US$500 GIFT CARD!", "body": "b", "terms": []}]})
+
+    monkeypatch.setattr(appmod, "generate_offer", fake_gen)
+    data = {"file": (io.BytesIO(b"%PDF fake"), "offer.pdf"),
+            "country": "United States", "property_name": "P"}
+    r = client.post("/generate", data=data, content_type="multipart/form-data")
+    assert r.status_code == 200
+    assert captured.get("images") == [b"img-bytes"]
+    assert captured.get("image_mime") == "image/png"
+    assert captured["country"] == "United States"
+
+
+def test_generate_with_unsupported_file_returns_400(client, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    data = {"file": (io.BytesIO(b"x"), "notes.txt"), "country": "United Kingdom"}
+    r = client.post("/generate", data=data, content_type="multipart/form-data")
     assert r.status_code == 400
+    assert ".pdf" in r.get_json()["error"]
 
 
 # ------------------------------------------------------------- DB run-logging

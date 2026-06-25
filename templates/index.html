@@ -129,7 +129,7 @@
           <input type="file" id="pdf" accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*" />
           <span id="fileStatus" class="hint"></span>
         </div>
-        <div class="hint">Or upload a PDF / screenshot / image of the offer. It is read automatically and added to the box above for you to review. Then just click Generate. (Text PDFs are read directly; scans and images are read by AI.)</div>
+        <div class="hint">Or upload a PDF / screenshot / image of the offer and click Generate, it is sent straight to the AI. (Use either the text boxes above or a file, not both.)</div>
 
         <button id="generateBtn" type="button">Generate offer content</button>
       </div>
@@ -186,58 +186,17 @@
       sel.appendChild(allGroup);
     })();
 
-    // Tracks the last file we read, so we never read the same file twice and
-    // never silently ignore an uploaded file. No separate "Extract" button:
-    // upload auto-reads the file, and Generate reads it too if needed.
-    let _extractedFile = null;
-
-    function setFileStatus(msg) { $("fileStatus").textContent = msg || ""; }
-
-    async function doExtract(file) {
-      setFileStatus("Reading file…");
-      try {
-        const fd = new FormData();
-        fd.append("pdf", file);
-        const res = await fetch("/extract-pdf", { method: "POST", body: fd });
-        const data = await res.json();
-        _extractedFile = file;  // mark attempted regardless of outcome
-        if (data.error) { setFileStatus("⚠ " + data.error); }
-        else if (data.warning) { setFileStatus("⚠ " + data.warning); }
-        else if (data.text) {
-          const box = $("offer");
-          box.value = (box.value ? box.value + "\n\n" : "") + data.text;
-          setFileStatus(data.source === "vision"
-            ? "✓ Read by AI — please check the text above for accuracy."
-            : "✓ Text extracted — review it above.");
-        } else {
-          setFileStatus("");
-        }
-        return data;
-      } catch (e) {
-        _extractedFile = file;
-        setFileStatus("⚠ Could not read the file: " + e);
-        return { error: String(e) };
-      }
-    }
-
-    // Auto-read the file the moment it is chosen, so the user never needs a
-    // separate Extract step before Generate.
+    // Show the chosen file name (the file is sent straight to the AI on Generate).
     $("pdf").addEventListener("change", () => {
-      const file = $("pdf").files[0];
-      if (file) doExtract(file);
+      const f = $("pdf").files[0];
+      $("fileStatus").textContent = f ? ("Selected: " + f.name + " — click Generate") : "";
     });
 
     $("generateBtn").addEventListener("click", async () => {
-      // Safety net: if a file is selected but has not been read into the box yet,
-      // read it now instead of generating as if nothing was uploaded.
       const file = $("pdf").files[0];
-      if (file && file !== _extractedFile) {
-        await doExtract(file);
-      }
       const raw_offer = $("offer").value.trim();
-      if (!raw_offer) {
-        alert(file ? "Could not read any text from the uploaded file. Please paste the offer text manually."
-                   : "Paste the raw offer text or upload a PDF/image first.");
+      if (!file && !raw_offer) {
+        alert("Paste the offer text or upload a PDF/image first.");
         return;
       }
       const out = $("output");
@@ -245,16 +204,26 @@
       btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Generating…';
       out.innerHTML = '<div class="placeholder">Working…</div>';
       try {
-        const res = await fetch("/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            raw_offer,
-            raw_tnc: $("tnc").value,
-            country: $("country").value,
-            property_name: $("property").value,
-          }),
-        });
+        let res;
+        if (file) {
+          // Send the file straight to the model (no separate extraction step).
+          const fd = new FormData();
+          fd.append("file", file);
+          fd.append("country", $("country").value);
+          fd.append("property_name", $("property").value);
+          res = await fetch("/generate", { method: "POST", body: fd });
+        } else {
+          res = await fetch("/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              raw_offer,
+              raw_tnc: $("tnc").value,
+              country: $("country").value,
+              property_name: $("property").value,
+            }),
+          });
+        }
         const data = await res.json();
         if (data.error) { out.innerHTML = `<div class="error">${escapeHtml(data.error)}</div>`; }
         else { renderResult(data, out); }

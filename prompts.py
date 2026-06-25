@@ -419,12 +419,13 @@ All three use the 7 generic T&Cs.
 """.strip()
 
 
-def build_user_prompt(country: str, property_name: str, raw_offer: str, tnc: str = "") -> str:
-    """Assemble the user message for a single generation request.
+def build_user_prompt(country: str, property_name: str, raw_offer: str = "",
+                      tnc: str = "", from_image: bool = False) -> str:
+    """Assemble the user message text for a single generation request.
 
-    If `tnc` is provided (the user pasted Terms & Conditions in the separate box),
-    it is shown as a clearly-labelled T&Cs section so the model rewrites those for
-    the T&Cs and builds the body only from the offer source.
+    - Text mode: the offer (and optional separate T&Cs) are pasted text.
+    - Image mode (from_image=True): the offer is in one or more images attached to
+      the message; the model reads them directly. No raw_offer/tnc text is needed.
     """
     currency = CURRENCY_MAP.get((country or "").strip(), None)
     if currency:
@@ -435,15 +436,29 @@ def build_user_prompt(country: str, property_name: str, raw_offer: str, tnc: str
         currency_line = "Country: not specified"
     prop_line = f"Property name(s): {property_name}" if property_name else "Property name(s): not specified"
 
-    tnc = (tnc or "").strip()
-    if tnc:
-        tnc_block = (
-            f"\nPROVIDED TERMS & CONDITIONS (verbatim, rewrite THESE for the T&Cs; "
-            f"do NOT use the generic list, and do NOT move these into the body):\n"
-            f'"""\n{tnc}\n"""\n'
+    if from_image:
+        source_block = (
+            "The offer is provided as one or more ATTACHED IMAGES (a PDF page or "
+            "screenshot). Read ALL the text from the image(s), including any Terms & "
+            "Conditions, and build the offer from it. Build the body ONLY from the "
+            "offer content and the T&Cs ONLY from any Terms & Conditions present."
         )
     else:
-        tnc_block = ""
+        tnc = (tnc or "").strip()
+        tnc_block = (
+            f'\nPROVIDED TERMS & CONDITIONS (verbatim, rewrite THESE for the T&Cs; '
+            f'do NOT use the generic list, and do NOT move these into the body):\n'
+            f'"""\n{tnc}\n"""\n'
+            if tnc else ""
+        )
+        source_block = (
+            f"Read the ENTIRE source below, including any Terms & Conditions block, "
+            f"and build the body ONLY from the offer source and the T&Cs ONLY from "
+            f"any T&Cs.\n\n"
+            f"RAW OFFER SOURCE (verbatim from the ticket / email / website):\n"
+            f'"""\n{raw_offer}\n"""\n'
+            f"{tnc_block}"
+        )
 
     return (
         f"{currency_line}\n"
@@ -452,12 +467,8 @@ def build_user_prompt(country: str, property_name: str, raw_offer: str, tnc: str
         f"================================================================\n"
         f"NOW WRITE THE OFFER FOR THIS SOURCE\n"
         f"================================================================\n"
-        f"Read the ENTIRE source below, including any Terms & Conditions block, "
-        f"and capture every relevant detail. Build the body ONLY from the offer "
-        f"source and the T&Cs ONLY from any T&Cs. Match the depth and human style "
-        f"of the examples above. No em dashes or en dashes anywhere.\n\n"
-        f"RAW OFFER SOURCE (verbatim from the ticket / email / website):\n"
-        f'"""\n{raw_offer}\n"""\n'
-        f"{tnc_block}\n"
+        f"Capture every relevant detail. Match the depth and human style of the "
+        f"examples above. No em dashes or en dashes anywhere.\n\n"
+        f"{source_block}\n"
         f"Produce the JSON output now."
     )

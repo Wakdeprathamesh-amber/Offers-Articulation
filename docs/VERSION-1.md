@@ -27,9 +27,9 @@ Raw offer (text / PDF / screenshot)
 
 1. Pick the **Country** (sets the currency).
 2. Enter the **property name(s)**.
-3. **Paste** the offer text, or **upload a PDF / screenshot / image** and click
-   *Extract from PDF / Image*.
-4. Click **Generate offer content**.
+3. **Paste** the offer text (with optional separate T&Cs), or **upload a PDF /
+   screenshot / image** (use one or the other).
+4. Click **Generate offer content** — an uploaded file is sent straight to the model.
 5. Review the output (Title with live character count, Body, numbered T&Cs, anything
    missing from the source, and any ⚠ review flags), then copy each field.
 
@@ -96,10 +96,10 @@ Raw offer (text / PDF / screenshot)
 
 ## 7. Known limitations (v1)
 
-- Vision transcription quality depends on image clarity; the user always reviews the
-  extracted text before generating.
+- Uploaded files go straight to the model, so accuracy depends on image clarity;
+  there is no intermediate text-review step for uploads (paste text if you want to
+  review/edit the source first).
 - First-person / currency auto-fixes are best-effort; the ⚠ warning is the backstop.
-- No run history / analytics yet (in progress — see roadmap).
 - No authentication / rate-limiting on the public URL (relies on the secret key).
 
 ---

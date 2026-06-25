@@ -14,7 +14,6 @@ file) before running:
 Then open http://127.0.0.1:5000
 """
 
-import io
 import json
 import os
 import re
@@ -67,15 +66,8 @@ def _too_large(_e):
     return jsonify({"error": "File too large. Maximum upload size is 8 MB."}), 413
 
 
-def extract_pdf_text(file_storage) -> str:
-    """Extract text from an uploaded PDF. Returns '' if no text layer."""
-    from pypdf import PdfReader
-
-    reader = PdfReader(file_storage)
-    chunks = []
-    for page in reader.pages:
-        chunks.append(page.extract_text() or "")
-    return "\n".join(chunks).strip()
+ALLOWED_UPLOAD_EXTS = (".pdf", ".png", ".jpg", ".jpeg", ".webp")
+_IMAGE_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
 
 def _chat_completion(messages, json_mode: bool = False):
@@ -104,34 +96,8 @@ def _chat_completion(messages, json_mode: bool = False):
         raise
 
 
-def generate_offer(country: str, property_name: str, raw_offer: str, raw_tnc: str = "") -> dict:
-    """Call the OpenAI API and return the parsed, post-processed, SOP-checked result."""
-    user_prompt = build_user_prompt(country, property_name, raw_offer, raw_tnc)
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt},
-    ]
-    response = _chat_completion(messages, json_mode=True)
-    data = json.loads(response.choices[0].message.content)
-    result = postprocess(data, country=country, property_name=property_name)
-    result["warnings"] = _compliance_warnings(result, country, property_name)
-    return result
-
-
-# ---- Vision OCR for image / scanned PDFs -----------------------------------
-VISION_PROMPT = (
-    "You are reading a promotional student-accommodation offer (and possibly its "
-    "Terms & Conditions) from an image or screenshot. Transcribe ALL the visible "
-    "text VERBATIM, preserving the offer details and the full Terms & Conditions "
-    "if present. Keep the original wording. Do not summarise, do not translate, do "
-    "not add anything. Output plain text only."
-)
-
-_IMAGE_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
-
-
 def _pdf_to_images(pdf_bytes: bytes, max_pages: int = 10, zoom: float = 2.0) -> list:
-    """Render the first max_pages of a PDF to PNG image bytes (for scanned PDFs)."""
+    """Render the first max_pages of a PDF to PNG image bytes."""
     import fitz  # pymupdf
 
     images = []
@@ -145,16 +111,46 @@ def _pdf_to_images(pdf_bytes: bytes, max_pages: int = 10, zoom: float = 2.0) -> 
     return images
 
 
-def extract_with_vision(images: list, mime: str = "image/png") -> str:
-    """Send page/screenshot images to the model and return the transcribed text."""
+def file_to_images(data: bytes, filename: str):
+    """Convert an uploaded PDF/image into (list of image bytes, mime type).
+    PDFs are rasterised page-by-page; images are used as-is."""
+    ext = filename[filename.rfind("."):].lower() if "." in filename else ""
+    if ext == ".pdf":
+        return _pdf_to_images(data), "image/png"
+    return [data], _IMAGE_MIME.get(ext, "image/png")
+
+
+def _image_content(images: list, mime: str) -> list:
     import base64
 
-    content = [{"type": "text", "text": VISION_PROMPT}]
+    parts = []
     for img in images:
         b64 = base64.b64encode(img).decode()
-        content.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
-    response = _chat_completion([{"role": "user", "content": content}])
-    return (response.choices[0].message.content or "").strip()
+        parts.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
+    return parts
+
+
+def generate_offer(country: str, property_name: str, raw_offer: str = "",
+                   raw_tnc: str = "", images: list = None, image_mime: str = "image/png") -> dict:
+    """Generate offer content from pasted text OR directly from uploaded image(s).
+
+    When `images` is given, the offer image(s) are sent straight to the model
+    (no separate text-extraction step); otherwise the pasted text is used.
+    """
+    if images:
+        text = build_user_prompt(country, property_name, from_image=True)
+        user_content = [{"type": "text", "text": text}] + _image_content(images, image_mime)
+    else:
+        user_content = build_user_prompt(country, property_name, raw_offer, raw_tnc)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
+    response = _chat_completion(messages, json_mode=True)
+    data = json.loads(response.choices[0].message.content)
+    result = postprocess(data, country=country, property_name=property_name)
+    result["warnings"] = _compliance_warnings(result, country, property_name)
+    return result
 
 
 def _compliance_warnings(result: dict, country: str, property_name: str = "") -> list:
@@ -581,66 +577,6 @@ def index():
     return render_template("index.html")
 
 
-_ALLOWED_UPLOAD_EXTS = (".pdf", ".png", ".jpg", ".jpeg", ".webp")
-
-
-@app.route("/extract-pdf", methods=["POST"])
-def extract_pdf():
-    """Extract text from an uploaded PDF or image for the user to review before
-    generating. Text-based PDFs are read directly; scanned/screenshot PDFs and
-    image uploads are read with the model's vision (when an API key is set)."""
-    if "pdf" not in request.files:
-        return jsonify({"error": "No PDF uploaded."}), 400
-    f = request.files["pdf"]
-    filename = (f.filename or "").lower()
-    if not filename.endswith(_ALLOWED_UPLOAD_EXTS):
-        return jsonify({"error": "Please upload a .pdf, .png, .jpg or .webp file."}), 400
-
-    data = f.read()
-    is_pdf = filename.endswith(".pdf")
-
-    # 1) Text-based PDF: use the real text layer, no AI needed.
-    if is_pdf:
-        try:
-            text = extract_pdf_text(io.BytesIO(data))
-        except Exception:
-            app.logger.exception("pdf extraction failed")
-            return jsonify({"error": "Could not read PDF. Please ensure it is a valid PDF file."}), 400
-        if text:
-            return jsonify({"text": text, "source": "text"})
-
-    # 2) Scanned/screenshot PDF or image upload: read with vision (needs a key).
-    if not os.environ.get("OPENAI_API_KEY"):
-        return jsonify(
-            {
-                "text": "",
-                "warning": (
-                    "This file has no selectable text (it looks like a scan or "
-                    "screenshot) and AI reading is unavailable because OPENAI_API_KEY "
-                    "is not set. Please copy the offer text and paste it in the box above."
-                ),
-            }
-        )
-    try:
-        if is_pdf:
-            images = _pdf_to_images(data)
-            mime = "image/png"
-        else:
-            ext = filename[filename.rfind("."):]
-            images = [data]
-            mime = _IMAGE_MIME.get(ext, "image/png")
-        vision_text = extract_with_vision(images, mime=mime)
-    except Exception:
-        app.logger.exception("vision extraction failed")
-        return jsonify({"error": "Could not read the file with AI. Please paste the text manually."}), 400
-
-    if not vision_text:
-        return jsonify(
-            {"text": "", "warning": "No text could be read from this file. Please paste the offer text manually."}
-        )
-    return jsonify({"text": vision_text, "source": "vision"})
-
-
 def _output_strings(result: dict):
     """Flatten the structured result into plain output_offer / output_tnc text for logging."""
     offers = result.get("offers") or []
@@ -657,25 +593,47 @@ def _output_strings(result: dict):
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    payload = request.get_json(force=True, silent=True) or {}
-    raw_offer = (payload.get("raw_offer") or "").strip()
-    raw_tnc = (payload.get("raw_tnc") or "").strip()
-    country = (payload.get("country") or "").strip()
-    property_name = (payload.get("property_name") or "").strip()
-
-    if not raw_offer:
-        return jsonify({"error": "Please provide the raw offer text."}), 400
-    if len(raw_offer) + len(raw_tnc) > MAX_RAW_OFFER_CHARS:
-        return jsonify(
-            {"error": f"Offer text is too long (max {MAX_RAW_OFFER_CHARS} characters)."}
-        ), 400
+    """Generate offer content from EITHER pasted text (JSON body) OR an uploaded
+    PDF/image (multipart). An uploaded file is sent straight to the model."""
     if not os.environ.get("OPENAI_API_KEY"):
         return jsonify(
             {"error": "OPENAI_API_KEY is not set. Add it to your environment or .env file."}
         ), 400
 
+    upload = request.files.get("file")
+    if upload is not None:
+        # ---- file path: send the image(s) directly to the model ----
+        country = (request.form.get("country") or "").strip()
+        property_name = (request.form.get("property_name") or "").strip()
+        filename = (upload.filename or "").lower()
+        if not filename.endswith(ALLOWED_UPLOAD_EXTS):
+            return jsonify({"error": "Please upload a .pdf, .png, .jpg or .webp file."}), 400
+        try:
+            images, mime = file_to_images(upload.read(), filename)
+        except Exception:
+            app.logger.exception("could not read uploaded file")
+            return jsonify({"error": "Could not read the uploaded file. Please try another file."}), 400
+        if not images:
+            return jsonify({"error": "The uploaded file appears to be empty."}), 400
+        raw_offer, raw_tnc = f"[uploaded file: {upload.filename}]", ""
+        gen_kwargs = {"images": images, "image_mime": mime}
+    else:
+        # ---- text path: pasted offer (+ optional T&Cs) ----
+        payload = request.get_json(force=True, silent=True) or {}
+        raw_offer = (payload.get("raw_offer") or "").strip()
+        raw_tnc = (payload.get("raw_tnc") or "").strip()
+        country = (payload.get("country") or "").strip()
+        property_name = (payload.get("property_name") or "").strip()
+        if not raw_offer:
+            return jsonify({"error": "Paste the offer text or upload a PDF/image."}), 400
+        if len(raw_offer) + len(raw_tnc) > MAX_RAW_OFFER_CHARS:
+            return jsonify(
+                {"error": f"Offer text is too long (max {MAX_RAW_OFFER_CHARS} characters)."}
+            ), 400
+        gen_kwargs = {"raw_offer": raw_offer, "raw_tnc": raw_tnc}
+
     try:
-        result = generate_offer(country, property_name, raw_offer, raw_tnc)
+        result = generate_offer(country, property_name, **gen_kwargs)
     except Exception:
         app.logger.exception("generation failed")
         return jsonify({"error": "Generation failed. Please try again."}), 500
