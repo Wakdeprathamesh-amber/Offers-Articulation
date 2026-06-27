@@ -18,15 +18,14 @@ services:
         value: "60"          # gpt-5.5 is slower than gpt-4o; give requests headroom
       - key: PYTHON_VERSION
         value: 3.12.6
-      # PostgreSQL run-logging. Set all of these securely in the Render dashboard
-      # (never commit DB credentials). If unset, run-logging is simply disabled.
-      - key: WAKDE_DB_HOST
+      # Run-logging via Google Sheets (reachable from Render). Set both securely in
+      # the Render dashboard. If unset, run-logging is simply disabled (generation
+      # still works). GOOGLE_SHEETS_CREDENTIALS_JSON = the whole service-account
+      # JSON pasted as the value; share the sheet with the service-account email.
+      - key: GOOGLE_SHEET_ID
         sync: false
-      - key: WAKDE_DB_PORT
+      - key: GOOGLE_SHEETS_CREDENTIALS_JSON
         sync: false
-      - key: WAKDE_DB_NAME
-        sync: false
-      - key: WAKDE_DB_USER
-        sync: false
-      - key: WAKDE_DB_PASSWORD
-        sync: false
+      # NOTE: PostgreSQL (WAKDE_DB_*) is intentionally NOT used here, the staging DB
+      # host is a private IP unreachable from Render. The app supports it for
+      # inside-network deploys; set those vars only in such an environment.
