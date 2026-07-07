@@ -96,6 +96,18 @@ GOLDEN RULES
 - NEVER use em dashes (—) or en dashes (–) ANYWHERE in the output. Write
   naturally: use commas, full stops, or the word "to" for ranges
   (e.g. "June 15 to July 31, 2026"). This keeps copy human and on-brand.
+- NEVER print the promo / discount / booking CODE (e.g. "DISC250", "use code
+  MAPLE750") in the Title, Body, or T&Cs. Extract it into "offer_code" only.
+- CURRENCY: use the currency EXACTLY as it appears in the source. Do NOT convert
+  or change it (changing the symbol would misrepresent the amount). If the source
+  uses US$, keep US$, even if the country seems different.
+- PRESERVE LIST STRUCTURE: if the source presents details or terms as a bulleted
+  or numbered list, keep them as a short bulleted list in the output (one "•" per
+  item), instead of expanding each item into a full sentence that repeats the
+  shared lead-in. Only use flowing paragraphs when the source is prose.
+- Also EXTRACT, into the per-offer fields: offer_code, offer_start_date,
+  offer_end_date, and the lease/tenancy lease_min, lease_max and lease_unit
+  (weeks or months) when stated. Leave a field empty if the source does not give it.
 - Do not use AI-cliché phrasing. Write like the human examples shown later.
 
 ================================================================
@@ -156,7 +168,8 @@ STEP 1 — OFFER TITLE
 - Include the clear offer value (cashback / discount / rebate / concession /
   gift card amount / weeks free).
 - Use digits, not words. CORRECT: "Get 4 Weeks FREE!"  WRONG: "Get Four Weeks FREE!".
-- Do NOT begin with "Book". Currency symbol must match the country.
+- Do NOT begin with "Book". Use the currency EXACTLY as written in the source
+  (do not convert it).
 - When generating several offers together, VARY the opening hook for each
   ("Big Bonus:", "Don't Miss:", "Special Deal:", "Hot Savings Alert:",
   "Big Savings:") and avoid repeating words. Avoid repeating Amber's name or
@@ -166,8 +179,8 @@ STEP 1 — OFFER TITLE
 STEP 2 — OFFER BODY  (this is where quality is won or lost)
 ================================================================
 Match the depth and structure of the human examples shown later.
-- Currency by country: UK = £, USA = US$, Australia = AU$, Canada = CA$,
-  Singapore = S$.
+- Currency: use exactly what the source uses (£, US$, AU$, CA$, S$, €, ...). Do
+  NOT convert it to the country's currency, keep the source's currency and value.
 - OPEN with a short, punchy line that states the reward
   (e.g. "Book an eligible room and enjoy up to 2 weeks rent FREE!").
 - Then give the specifics in short, scannable paragraphs separated by blank
@@ -255,6 +268,7 @@ Return ONLY a JSON object with this exact shape:
   "flags": ["direct_booking_only" | "lucky_draw" | "refer_a_friend" | "low_rate" | "none", ...],
   "needs_kam_confirmation": true | false,
   "source_has_tncs": true | false,
+  "detected_country": "the country you infer from the offer content (property location, currency, phrasing), or empty string if genuinely unclear",
   "detected_operator_names": ["the PMG / operator / landlord / management-company / brand name(s) you found, EXCLUDING the property's own identifying name", ...],
   "offers": [
     {{
@@ -262,6 +276,12 @@ Return ONLY a JSON object with this exact shape:
       "title": "the Offer Title",
       "body": "the Offer Body as a single string, using \\n for line breaks and • for bullets",
       "terms": ["(1) ...", "(2) ...", ...],
+      "offer_code": "the promo / discount code if the source has one (e.g. DISC250), else empty string",
+      "offer_start_date": "offer validity START date if given, else empty string (keep the source's format, e.g. 15 June 2026)",
+      "offer_end_date": "offer validity END date if given, else empty string",
+      "lease_min": "minimum lease/tenancy length as a NUMBER only if stated, else empty string",
+      "lease_max": "maximum lease/tenancy length as a NUMBER only if stated, else empty string",
+      "lease_unit": "weeks | months (whichever the source uses), else empty string",
       "missing_info": ["lease window not provided", ...]
     }}
   ]

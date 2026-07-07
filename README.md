@@ -46,10 +46,13 @@ and for each offer the Title (with live character count vs the 60/72 limits),
 Body, numbered T&Cs, and anything missing from the source.
 
 The app deterministically cleans the model output before showing it (removes em/en
-dashes, agent/commission clauses, contact details; renames the operator to
-"Property Management"; normalises the currency; fixes common first-person wording).
-Anything the automatic cleaner cannot safely fix is listed in a **⚠ Review before
-publishing** panel so the reviewer can correct it before copying.
+dashes, agent/commission clauses, contact details, and the promo/discount **code**;
+renames the operator to "Property Management" and generalises the property name;
+fixes common first-person wording). It also extracts structured fields (offer code,
+start/end dates, lease min/max + unit). The currency is **kept exactly as in the
+source** (never converted) — a mismatch with the selected country is only flagged.
+A country must be selected. Anything the cleaner cannot safely fix, plus any
+country/currency mismatch, is listed in a **⚠ Review before publishing** panel.
 
 ## Notes / limits (v1)
 

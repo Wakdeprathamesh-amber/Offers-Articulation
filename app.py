@@ -20,7 +20,7 @@ import re
 
 from flask import Flask, jsonify, render_template, request
 
-from prompts import SYSTEM_PROMPT, build_user_prompt, CURRENCY_MAP
+from prompts import SYSTEM_PROMPT, build_user_prompt
 
 # Load .env if python-dotenv is available (optional convenience).
 try:
@@ -176,10 +176,21 @@ def _compliance_warnings(result: dict, country: str, property_name: str = "") ->
         "source_has_tncs": result.get("source_has_tncs", False),
     }
     try:
-        return check_compliance(result, ctx)
+        violations = check_compliance(result, ctx)
     except Exception:
         app.logger.exception("compliance check failed")
-        return []
+        violations = []
+
+    # Flag (do not change) a mismatch between the selected country and the country
+    # the model inferred from the offer content.
+    detected_country = (result.get("detected_country") or "").strip()
+    if country and detected_country and detected_country.lower() != country.strip().lower():
+        violations.append({
+            "severity": "warn", "rule": "COUNTRY_MISMATCH",
+            "message": f"selected country is '{country}' but the offer looks like '{detected_country}', please verify",
+            "offer_index": None,
+        })
+    return violations
 
 
 def postprocess(data: dict, country: str = "", property_name: str = "") -> dict:
@@ -191,16 +202,44 @@ def postprocess(data: dict, country: str = "", property_name: str = "") -> dict:
     generalise the property name, and finally annotate title lengths.
     """
     data = _normalize(data)
-    expected_symbol = CURRENCY_MAP.get((country or "").strip())
     detected = data.get("detected_operator_names", [])
     data = _strip_dashes(data)
     data = _strip_contact_info(data)
-    data = _fix_currency(data, expected_symbol)
+    data = _strip_offer_code(data)
     data = _fix_first_person(data)
     data = _clean_agent_terms(data)
     data = _rename_operator(data, detected)
     data = _generalise_property(data, property_name)
     data = _annotate(data)
+    return data
+
+
+def _strip_offer_code(data: dict) -> dict:
+    """Remove the promo/discount code from the copy (title/body/terms). The code is
+    kept only in the offer's 'offer_code' field. Currency is intentionally NOT
+    changed here, per the flag-only currency policy."""
+    for offer in data.get("offers", []) or []:
+        code = str(offer.get("offer_code") or "").strip()
+
+        def fix(text):
+            if not isinstance(text, str):
+                return text
+            # remove "use code X" / "code: X" / "code X" phrasings (token must
+            # contain a digit, so real words like "code of conduct" are untouched)
+            text = re.sub(r"\b(?:use\s+)?(?:promo\s+|discount\s+|voucher\s+|booking\s+)?code[:\s]+[\"']?(?=[A-Za-z0-9\-]*\d)[A-Za-z0-9\-]{3,}[\"']?",
+                          "", text, flags=re.I)
+            if code and len(code) >= 3:
+                text = re.sub(rf"\b{re.escape(code)}\b", "", text)
+            text = re.sub(r"\(\s*\)", "", text)            # empty parens left behind
+            text = re.sub(r"\s+([.,;:!?])", r"\1", text)   # space before punctuation
+            text = re.sub(r"\s{2,}", " ", text)
+            return text.strip()
+
+        for key in ("title", "body"):
+            if isinstance(offer.get(key), str):
+                offer[key] = fix(offer[key])
+        if isinstance(offer.get("terms"), list):
+            offer["terms"] = [fix(t) for t in offer["terms"]]
     return data
 
 
@@ -239,12 +278,19 @@ def _normalize(data: dict) -> dict:
             missing = [missing]
         elif not isinstance(missing, list):
             missing = []
+        lmin, lmax, lunit = _lease_fields(o)
         clean_offers.append(
             {
                 "properties": [str(p) for p in props],
                 "title": o.get("title") if isinstance(o.get("title"), str) else "",
                 "body": o.get("body") if isinstance(o.get("body"), str) else "",
                 "terms": [str(t) for t in terms],
+                "offer_code": _as_str(o.get("offer_code")),
+                "offer_start_date": _as_str(o.get("offer_start_date")),
+                "offer_end_date": _as_str(o.get("offer_end_date")),
+                "lease_min": lmin,
+                "lease_max": lmax,
+                "lease_unit": lunit,
                 "missing_info": [str(m) for m in missing],
             }
         )
@@ -257,7 +303,25 @@ def _normalize(data: dict) -> dict:
         names = []
     data["detected_operator_names"] = [str(n).strip() for n in names if str(n).strip()]
     data["source_has_tncs"] = bool(data.get("source_has_tncs", False))
+    data["detected_country"] = _as_str(data.get("detected_country"))
     return data
+
+
+def _as_str(v) -> str:
+    return v.strip() if isinstance(v, str) else ("" if v is None else str(v))
+
+
+def _lease_fields(offer: dict):
+    """Return (lease_min, lease_max, lease_unit) with SOP defaults applied:
+    min -> 1 if missing; max -> 72 weeks / 24 months if missing; unit -> weeks
+    if not stated. Values are returned as strings for display/logging."""
+    unit_raw = str(offer.get("lease_unit") or "").strip().lower()
+    unit = "months" if "month" in unit_raw else "weeks"
+    m_min = re.search(r"\d+", str(offer.get("lease_min") or ""))
+    m_max = re.search(r"\d+", str(offer.get("lease_max") or ""))
+    lease_min = m_min.group(0) if m_min else "1"
+    lease_max = m_max.group(0) if m_max else ("24" if unit == "months" else "72")
+    return lease_min, lease_max, unit
 
 
 def _clean_dashes(text: str) -> str:
@@ -344,33 +408,6 @@ def _strip_contact_info(data: dict) -> dict:
                 continue  # contact-only stub
             kept.append(scrubbed)
         offer["terms"] = [f"({i+1}) {b}" for i, b in enumerate(kept)]
-    return data
-
-
-# Distinctive currency tokens, ordered longest-first so "US$" is one token, never "S$".
-_CURRENCY_TOKEN_RE = re.compile(r"US\$|AU\$|CA\$|NZ\$|HK\$|S\$|£|€")
-
-
-def _fix_currency(data: dict, expected_symbol) -> dict:
-    """When the country maps to a known symbol, replace any other distinctive
-    currency token in title/body with the expected one (the number is preserved).
-    No-op when the symbol is unknown."""
-    if not expected_symbol:
-        return data
-
-    def fix(text):
-        if not isinstance(text, str):
-            return text
-        return _CURRENCY_TOKEN_RE.sub(
-            lambda m: expected_symbol if m.group(0) != expected_symbol else m.group(0),
-            text,
-        )
-
-    for offer in data.get("offers", []) or []:
-        if isinstance(offer.get("title"), str):
-            offer["title"] = fix(offer["title"])
-        if isinstance(offer.get("body"), str):
-            offer["body"] = fix(offer["body"])
     return data
 
 
@@ -632,6 +669,9 @@ def generate():
             ), 400
         gen_kwargs = {"raw_offer": raw_offer, "raw_tnc": raw_tnc}
 
+    if not country:
+        return jsonify({"error": "Please select a country before generating."}), 400
+
     try:
         result = generate_offer(country, property_name, **gen_kwargs)
     except Exception:
@@ -640,8 +680,16 @@ def generate():
 
     # Best-effort run logging; never blocks the response.
     output_offer, output_tnc = _output_strings(result)
-    run_id = store.log_run(country, property_name, MODEL, raw_offer, raw_tnc,
-                           output_offer, output_tnc, result)
+    o0 = (result.get("offers") or [{}])[0]
+    run_id = store.log_run(
+        country, property_name, MODEL, raw_offer, raw_tnc, output_offer, output_tnc, result,
+        offer_code=o0.get("offer_code", ""),
+        offer_start_date=o0.get("offer_start_date", ""),
+        offer_end_date=o0.get("offer_end_date", ""),
+        lease_min=o0.get("lease_min", ""),
+        lease_max=o0.get("lease_max", ""),
+        lease_unit=o0.get("lease_unit", ""),
+    )
     if run_id is not None:
         result["run_id"] = run_id
 

@@ -143,7 +143,7 @@ def check_compliance(result, context):
 
         if expected_symbol:
             for sym in _wrong_currencies(title, expected_symbol):
-                violations.append(_v("error", "TITLE_CURRENCY", f"title has wrong currency '{sym}' for {country}", i))
+                violations.append(_v("warn", "TITLE_CURRENCY", f"title currency '{sym}' does not match {country}; kept as in the source, please verify", i))
 
         if _NUMBER_WORD_UNIT_RE.search(title):
             violations.append(_v("error", "TITLE_DIGITS", "title spells out a number; SOP requires digits", i))
@@ -174,7 +174,7 @@ def check_compliance(result, context):
         # ---- BODY ---------------------------------------------------------
         if expected_symbol:
             for sym in _wrong_currencies(body, expected_symbol):
-                violations.append(_v("error", "BODY_CURRENCY", f"body has wrong currency '{sym}' for {country}", i))
+                violations.append(_v("warn", "BODY_CURRENCY", f"body currency '{sym}' does not match {country}; kept as in the source, please verify", i))
 
         if _EMAIL_RE.search(body) or _URL_RE.search(body) or _PHONE_RE.search(body):
             violations.append(_v("error", "BODY_CONTACT", "body contains an email/url/phone number", i))

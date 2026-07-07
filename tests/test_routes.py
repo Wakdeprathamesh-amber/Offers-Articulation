@@ -56,7 +56,7 @@ def test_generate_handles_exception_as_500(client, appmod, monkeypatch):
         raise RuntimeError("model exploded")
 
     monkeypatch.setattr(appmod, "generate_offer", boom)
-    r = client.post("/generate", json={"raw_offer": "offer"})
+    r = client.post("/generate", json={"raw_offer": "offer", "country": "United Kingdom"})
     assert r.status_code == 500
     assert "Generation failed" in r.get_json()["error"]
 
@@ -74,7 +74,7 @@ def test_generate_bad_json_from_model_is_clean_500(client, appmod, monkeypatch):
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setattr("openai.OpenAI", make_fake_openai("<<not json>>"))
-    r = client.post("/generate", json={"raw_offer": "offer"})
+    r = client.post("/generate", json={"raw_offer": "offer", "country": "United Kingdom"})
     assert r.status_code == 500
     assert "Generation failed" in r.get_json()["error"]
 
@@ -93,7 +93,7 @@ def test_generate_error_message_is_sanitized(client, appmod, monkeypatch):
         raise RuntimeError("super secret internal detail")
 
     monkeypatch.setattr(appmod, "generate_offer", boom)
-    r = client.post("/generate", json={"raw_offer": "offer"})
+    r = client.post("/generate", json={"raw_offer": "offer", "country": "United Kingdom"})
     assert r.status_code == 500
     body = r.get_json()["error"]
     assert "secret internal detail" not in body
@@ -194,3 +194,10 @@ def test_feedback_rejects_bad_rating(client, appmod, monkeypatch):
 def test_feedback_requires_rating_or_comment(client):
     r = client.post("/feedback", json={"run_id": 1})
     assert r.status_code == 400
+
+
+def test_generate_requires_country(client, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    r = client.post("/generate", json={"raw_offer": "£500 off"})  # no country
+    assert r.status_code == 400
+    assert "country" in r.get_json()["error"].lower()

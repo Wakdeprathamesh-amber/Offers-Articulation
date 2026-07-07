@@ -81,6 +81,10 @@
     .len.over_target { color: var(--warn); }
     .len.over_hard_cap { color: var(--err); }
     .missing { font-size: 12px; color: var(--warn); margin-top: 6px; }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 10px 0 4px; }
+    .metaitem { display: flex; flex-direction: column; font-size: 13px; }
+    .metak { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+    .metav { color: var(--ink); }
     .review { background: #fff7e6; border: 1px solid #f5d68a; color: var(--warn); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
     .review strong { display: block; margin-bottom: 4px; }
     .review ul { margin: 0; padding-left: 18px; }
@@ -195,6 +199,10 @@
     $("generateBtn").addEventListener("click", async () => {
       const file = $("pdf").files[0];
       const raw_offer = $("offer").value.trim();
+      if (!$("country").value) {
+        alert("Please select a country first.");
+        return;
+      }
       if (!file && !raw_offer) {
         alert("Paste the offer text or upload a PDF/image first.");
         return;
@@ -276,6 +284,19 @@
         const termsText = terms.join("\n");
         const termsHtml = `<ul class="terms">` + terms.map((t) => `<li>${escapeHtml(t)}</li>`).join("") + `</ul>`;
         html += field("Terms & Conditions", termsHtml, termsText);
+        // Extracted structured fields
+        const lease = (o.lease_min || o.lease_max)
+          ? `${escapeHtml(o.lease_min || "")} to ${escapeHtml(o.lease_max || "")} ${escapeHtml(o.lease_unit || "")}`.trim()
+          : "";
+        const meta = [
+          ["Offer code", o.offer_code],
+          ["Offer start date", o.offer_start_date],
+          ["Offer end date", o.offer_end_date],
+          ["Lease duration", lease],
+        ];
+        html += `<div class="meta">` + meta.map(([k, v]) =>
+          `<div class="metaitem"><span class="metak">${k}</span><span class="metav">${v ? escapeHtml(v) : "—"}</span></div>`
+        ).join("") + `</div>`;
         // Missing info
         if (o.missing_info && o.missing_info.length) {
           html += `<div class="missing">⚠ Missing from source: ${escapeHtml(o.missing_info.join("; "))}</div>`;

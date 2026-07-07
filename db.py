@@ -20,20 +20,30 @@ TABLE = "offer_articulation_runs"
 
 _DDL = f"""
 CREATE TABLE IF NOT EXISTS {TABLE} (
-    id            BIGSERIAL PRIMARY KEY,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    country       TEXT,
-    property_name TEXT,
-    model         TEXT,
-    input_offer   TEXT,
-    input_tnc     TEXT,
-    output_offer  TEXT,
-    output_tnc    TEXT,
-    output_json   JSONB,
-    rating        SMALLINT,
-    comment       TEXT
+    id               BIGSERIAL PRIMARY KEY,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    country          TEXT,
+    property_name    TEXT,
+    model            TEXT,
+    input_offer      TEXT,
+    input_tnc        TEXT,
+    output_offer     TEXT,
+    output_tnc       TEXT,
+    offer_code       TEXT,
+    offer_start_date TEXT,
+    offer_end_date   TEXT,
+    lease_min        TEXT,
+    lease_max        TEXT,
+    lease_unit       TEXT,
+    output_json      JSONB,
+    rating           SMALLINT,
+    comment          TEXT
 );
 """
+# Backfill columns on an already-existing table (safe no-op if present).
+_MIGRATE = [f"ALTER TABLE {TABLE} ADD COLUMN IF NOT EXISTS {c} TEXT"
+            for c in ("offer_code", "offer_start_date", "offer_end_date",
+                      "lease_min", "lease_max", "lease_unit")]
 
 
 def _config():
@@ -77,6 +87,8 @@ def init_db() -> bool:
         try:
             with conn, conn.cursor() as cur:
                 cur.execute(_DDL)
+                for stmt in _MIGRATE:
+                    cur.execute(stmt)
         finally:
             conn.close()
         return True
@@ -86,7 +98,9 @@ def init_db() -> bool:
 
 
 def log_run(country, property_name, model, input_offer, input_tnc,
-            output_offer, output_tnc, output_json):
+            output_offer, output_tnc, output_json,
+            offer_code="", offer_start_date="", offer_end_date="",
+            lease_min="", lease_max="", lease_unit=""):
     """Insert one run row and return its id, or None on any failure."""
     try:
         conn = _connect()
@@ -97,11 +111,13 @@ def log_run(country, property_name, model, input_offer, input_tnc,
                 cur.execute(
                     f"""INSERT INTO {TABLE}
                         (country, property_name, model, input_offer, input_tnc,
-                         output_offer, output_tnc, output_json)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                         output_offer, output_tnc, offer_code, offer_start_date,
+                         offer_end_date, lease_min, lease_max, lease_unit, output_json)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
                         RETURNING id""",
                     (country, property_name, model, input_offer, input_tnc,
-                     output_offer, output_tnc, json.dumps(output_json)),
+                     output_offer, output_tnc, offer_code, offer_start_date,
+                     offer_end_date, lease_min, lease_max, lease_unit, json.dumps(output_json)),
                 )
                 run_id = cur.fetchone()[0]
         finally:

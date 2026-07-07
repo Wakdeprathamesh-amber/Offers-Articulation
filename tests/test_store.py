@@ -66,3 +66,12 @@ def test_sheets_log_run_returns_none_on_error(monkeypatch):
     monkeypatch.setenv("GOOGLE_SHEET_ID", "sheet123")
     monkeypatch.setenv("GOOGLE_SHEETS_CREDENTIALS_JSON", '{"type":"service_account"}')
     assert sheets.log_run("a", "b", "c", "d", "e", "f", "g", {}) is None
+
+
+def test_sheets_headers_include_new_fields():
+    for col in ("offer_code", "offer_start_date", "offer_end_date",
+                "lease_min", "lease_max", "lease_unit", "rating", "comment"):
+        assert col in sheets.HEADERS
+    # rating/comment column indices are derived from HEADERS (not hardcoded)
+    assert sheets._RATING_COL == sheets.HEADERS.index("rating") + 1
+    assert sheets._COMMENT_COL == sheets.HEADERS.index("comment") + 1

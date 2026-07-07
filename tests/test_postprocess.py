@@ -94,8 +94,9 @@ def test_pipeline_runs_all_sanitizers(appmod):
         "source_has_tncs": True,
         "offers": [{
             "properties": ["Maple Heights Residences, Toronto"],
-            "title": "Special Deal: Get US$750 CASHBACK — Today!",   # wrong currency + em dash
-            "body": "We will credit US$750 at Maple Heights Residences! Email x@y.com. Apply now!",
+            "title": "Special Deal: Get CA$750 CASHBACK — Today!",   # em dash to clean
+            "body": "We will credit CA$750 at Maple Heights Residences! Use code MAPLE750. Email x@y.com. Apply now!",
+            "offer_code": "MAPLE750",
             "terms": [
                 "1. We reserve the right to amend.",
                 "2. Credited by Maple Living Group after move-in.",
@@ -103,15 +104,19 @@ def test_pipeline_runs_all_sanitizers(appmod):
             ],
         }],
     }
-    out = appmod.postprocess(data, country="Canada")
+    out = appmod.postprocess(data, country="Canada", property_name="Maple Heights Residences, Toronto")
     o = out["offers"][0]
     blob = json.dumps(out)
     assert "—" not in blob                       # dash cleaned
-    assert "US$" not in o["title"] and "CA$750" in o["title"]   # currency fixed
+    assert "CA$750" in o["body"]                 # currency KEPT (not changed)
+    assert "MAPLE750" not in o["title"] and "MAPLE750" not in o["body"]  # offer code stripped from copy
+    assert o["offer_code"] == "MAPLE750"         # ...but kept as a field
     assert "We will" not in o["body"]            # first person fixed
     assert "x@y.com" not in o["body"]            # contact stripped
     assert "Maple Living Group" not in " ".join(o["terms"])     # operator renamed
+    assert "Maple Heights" not in o["body"]      # property generalised
     assert o["terms"] == [
         "(1) Property Management reserves the right to amend.",
         "(2) Credited by Property Management after move-in.",
     ]                                            # contact-only term dropped + renumbered
+    assert o["lease_min"] == "1" and o["lease_max"] == "72" and o["lease_unit"] == "weeks"  # defaults
