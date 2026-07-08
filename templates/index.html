@@ -199,14 +199,11 @@
     $("generateBtn").addEventListener("click", async () => {
       const file = $("pdf").files[0];
       const raw_offer = $("offer").value.trim();
-      if (!$("country").value) {
-        alert("Please select a country first.");
-        return;
-      }
       if (!file && !raw_offer) {
         alert("Paste the offer text or upload a PDF/image first.");
         return;
       }
+      // No country is allowed: it is flagged in the output, not blocked.
       const out = $("output");
       const btn = $("generateBtn");
       btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Generating…';

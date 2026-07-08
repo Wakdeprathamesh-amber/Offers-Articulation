@@ -181,9 +181,17 @@ def _compliance_warnings(result: dict, country: str, property_name: str = "") ->
         app.logger.exception("compliance check failed")
         violations = []
 
+    # Missing country is allowed (soft gate): flag it so the reviewer can add it.
+    detected_country = (result.get("detected_country") or "").strip()
+    if not (country or "").strip():
+        hint = f" (the offer looks like '{detected_country}')" if detected_country else ""
+        violations.append({
+            "severity": "warn", "rule": "COUNTRY_MISSING",
+            "message": f"no country was selected{hint}; please set it before publishing",
+            "offer_index": None,
+        })
     # Flag (do not change) a mismatch between the selected country and the country
     # the model inferred from the offer content.
-    detected_country = (result.get("detected_country") or "").strip()
     if country and detected_country and detected_country.lower() != country.strip().lower():
         violations.append({
             "severity": "warn", "rule": "COUNTRY_MISMATCH",
@@ -710,9 +718,7 @@ def generate():
             ), 400
         gen_kwargs = {"raw_offer": raw_offer, "raw_tnc": raw_tnc}
 
-    if not country:
-        return jsonify({"error": "Please select a country before generating."}), 400
-
+    # No hard block on a missing country: generate anyway and flag it (see gate).
     try:
         result = generate_offer(country, property_name, **gen_kwargs)
     except Exception:

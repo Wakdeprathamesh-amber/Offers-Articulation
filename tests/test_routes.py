@@ -196,8 +196,21 @@ def test_feedback_requires_rating_or_comment(client):
     assert r.status_code == 400
 
 
-def test_generate_requires_country(client, monkeypatch):
+def test_generate_without_country_continues_and_flags(client, appmod, monkeypatch):
+    # Missing country is a soft gate now: generate anyway and flag it.
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    fake = {"applicable": True, "flags": ["none"],
+            "offers": [{"properties": ["P"], "title": "Save £500 OFF!", "body": "b", "terms": []}]}
+    monkeypatch.setattr(appmod, "generate_offer",
+                        lambda country, prop, **k: {**appmod.postprocess(fake),
+                                                    "warnings": appmod._compliance_warnings(appmod.postprocess(fake), country)})
     r = client.post("/generate", json={"raw_offer": "£500 off"})  # no country
-    assert r.status_code == 400
-    assert "country" in r.get_json()["error"].lower()
+    assert r.status_code == 200
+    rules = {w["rule"] for w in r.get_json().get("warnings", [])}
+    assert "COUNTRY_MISSING" in rules
+
+
+def test_compliance_flags_missing_country(appmod):
+    result = appmod.postprocess({"applicable": True, "offers": [{"title": "T", "body": "b", "terms": []}]})
+    warns = appmod._compliance_warnings(result, "")   # no country
+    assert "COUNTRY_MISSING" in {w["rule"] for w in warns}
