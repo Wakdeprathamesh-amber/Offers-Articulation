@@ -84,3 +84,26 @@ def test_currency_mismatch_flagged(appmod, monkeypatch):
     rules = {w["rule"] for w in out["warnings"]}
     assert "TITLE_CURRENCY" in rules or "BODY_CURRENCY" in rules   # flagged
     assert "COUNTRY_MISMATCH" in rules                             # US vs UK flagged
+
+
+# ---- bullet formatting: split glued CTA / lead-in off bullet lines ---------
+def test_tidy_splits_cta_glued_to_bullet(appmod):
+    out = appmod._tidy_body_lists({"offers": [{
+        "body": "Perks:\n• King single bed\n• Air conditioning Apply now!", "terms": []}]})
+    body = out["offers"][0]["body"]
+    assert "conditioning Apply" not in body
+    assert body.rstrip().endswith("Apply now!")
+
+
+def test_tidy_splits_leadin_glued_to_bullet(appmod):
+    out = appmod._tidy_body_lists({"offers": [{
+        "body": "• Air conditioning Eligible residents will receive:\n• 2 weeks FREE", "terms": []}]})
+    body = out["offers"][0]["body"]
+    assert "conditioning Eligible" not in body
+    assert "Eligible residents will receive:" in body
+
+
+def test_tidy_leaves_plain_bullets_untouched(appmod):
+    b = "• Private ensuite bathroom\n• 2 weeks rent FREE on half-year leases"
+    out = appmod._tidy_body_lists({"offers": [{"body": b, "terms": []}]})
+    assert out["offers"][0]["body"] == b

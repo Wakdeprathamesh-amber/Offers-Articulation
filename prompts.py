@@ -105,6 +105,10 @@ GOLDEN RULES
   or numbered list, keep them as a short bulleted list in the output (one "•" per
   item), instead of expanding each item into a full sentence that repeats the
   shared lead-in. Only use flowing paragraphs when the source is prose.
+  FORMATTING: each bullet MUST be on its own line (start it with "\n• "). After a
+  bulleted list ENDS, put a BLANK LINE, then continue with the next sentence or the
+  call-to-action on a new line. NEVER put a sentence on the same line as a bullet
+  (wrong: "• Air conditioning Apply now!"; right: "• Air conditioning\n\nApply now!").
 - Also EXTRACT, into the per-offer fields: offer_code, offer_start_date,
   offer_end_date, and the lease/tenancy lease_min, lease_max and lease_unit
   (weeks or months) when stated. Leave a field empty if the source does not give it.

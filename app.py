@@ -206,11 +206,52 @@ def postprocess(data: dict, country: str = "", property_name: str = "") -> dict:
     data = _strip_dashes(data)
     data = _strip_contact_info(data)
     data = _strip_offer_code(data)
+    data = _tidy_body_lists(data)
     data = _fix_first_person(data)
     data = _clean_agent_terms(data)
     data = _rename_operator(data, detected)
     data = _generalise_property(data, property_name)
     data = _annotate(data)
+    return data
+
+
+# A CTA / a following lead-in wrongly glued onto the end of a bullet line.
+_CTA_TAIL_RE = re.compile(
+    r"\s+((?:Apply|Book|Secure|Sign|Enquire|Claim|Reserve|Grab|Act|Lease|Move)\b[^\n]*?[!.])\s*$",
+    re.I,
+)
+# A trailing "Lead-in ...:" (e.g. "Eligible residents will receive:") glued after
+# a bullet item that ends in a lowercase letter.
+_LEADIN_TAIL_RE = re.compile(r"(•[^\n]*?[a-z])\s+([A-Z][A-Za-z']*(?:\s+[A-Za-z'][A-Za-z']*){0,5}:)\s*$")
+
+
+def _tidy_body_lists(data: dict) -> dict:
+    """Fix the common formatting glitch where a following sentence / lead-in / CTA
+    is stuck on the same line as the last bullet, e.g. '• Air conditioning Apply
+    now!' -> the trailing text is moved to its own paragraph for clarity."""
+    for offer in data.get("offers", []) or []:
+        body = offer.get("body")
+        if not isinstance(body, str) or "•" not in body:
+            continue
+        out = []
+        for line in body.split("\n"):
+            if line.lstrip().startswith("•"):
+                m = _LEADIN_TAIL_RE.search(line)  # "• item Next lead-in:" -> split
+                if m:
+                    line = f"{m.group(1)}\n\n{m.group(2)}"
+                for piece in line.split("\n"):
+                    if piece.lstrip().startswith("•"):
+                        c = _CTA_TAIL_RE.search(piece)  # "• item Apply now!" -> split
+                        if c and c.start() > 2:
+                            out.append(piece[:c.start()].rstrip())
+                            out.append("")
+                            out.append(c.group(1).strip())
+                            continue
+                    out.append(piece)
+                continue
+            out.append(line)
+        text = re.sub(r"\n{3,}", "\n\n", "\n".join(out))
+        offer["body"] = text.strip()
     return data
 
 
